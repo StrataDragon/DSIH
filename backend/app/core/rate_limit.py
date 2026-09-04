@@ -64,8 +64,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
-        # Exclude OpenAPI documentation, static files, and health checks
-        if path in {"/health", "/", "/docs", "/redoc", "/openapi.json"} or path.startswith("/static"):
+        # Exclude OPTIONS (CORS preflight), OpenAPI documentation, static files, and health checks
+        if request.method == "OPTIONS" or path in {"/health", "/", "/docs", "/redoc", "/openapi.json"} or path.startswith("/static"):
             return await call_next(request)
 
         # Determine rate limit tier

@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
+import { AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { ProfileForm } from "../components/ProfileForm";
 import { SectionCard } from "../components/SectionCard";
 import { useAppContext } from "../context/AppContext";
 import { api } from "../services/api";
 import { t } from "../utils/i18n";
 import { SUPPORTED_LANGUAGES } from "../utils/languages";
+import { LanguageSelect } from "../components/LanguageSelect";
+import { isProfileComplete, getMissingProfileFields } from "../utils/profileUtils";
 
 const friendlyFieldNames: Record<string, Record<string, string>> = {
   full_name: { en: "Name", hi: "नाम", kn: "ಹೆಸರು", te: "పేరు", ta: "பெயர்", ml: "പേര്", bn: "নাম", mr: "नाव", gu: "નામ" },
@@ -39,9 +43,10 @@ const neverStoredItems: Record<string, string[]> = {
 };
 
 export function ProfilePage() {
-  const { profile, setProfile, language, setLanguage } = useAppContext();
+  const { profile, setProfile, language, setLanguage, refreshSession } = useAppContext();
   const [storedSummary, setStoredSummary] = useState<any | null>(null);
   const [message, setMessage] = useState("");
+  const [saveError, setSaveError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState("");
 
   useEffect(() => {
@@ -53,30 +58,104 @@ export function ProfilePage() {
   const fieldsStored = (storedSummary?.fields_stored || []).map((field: string) => friendlyFieldNames[field]?.[langKey] || friendlyFieldNames[field]?.en || field);
   const neverStored = neverStoredItems[langKey] || neverStoredItems.en;
 
+  const profileIsComplete = isProfileComplete(profile);
+  const missingFields = getMissingProfileFields(profile, language);
+
   return (
     <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
       <SectionCard title={t(language, "profilePrivacy")}>
+        {!profileIsComplete && (
+          <div className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+            <div className="flex items-center gap-2 font-bold text-amber-900 text-base">
+              <AlertCircle size={20} className="text-amber-600 flex-shrink-0" />
+              {language === "hi"
+                ? "अनिवार्य प्रोफ़ाइल पूर्णता"
+                : language === "kn"
+                ? "ಕಡ್ಡಾಯ ಪ್ರೊಫೈಲ್ ಪೂರ್ಣಗೊಳಿಸುವಿಕೆ"
+                : "Mandatory Profile Completion"}
+            </div>
+            <p className="mt-1 text-sm text-amber-900">
+              {language === "hi"
+                ? "सरकारी योजनाओं, पात्रता जांच और डैशबोर्ड को अनलॉक करने के लिए कृपया अपनी प्रोफ़ाइल पूरी करें।"
+                : language === "kn"
+                ? "ಸರ್ಕಾರಿ ಯೋಜನೆಗಳು, ಅರ್ಹತಾ ತಪಾಸಣೆ ಮತ್ತು ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ ಅನ್ನು ಅನ್‌ಲಾಕ್ ಮಾಡಲು ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಪೂರ್ಣಗೊಳಿಸಿ."
+                : "Please complete your required profile information below to unlock scheme discovery, eligibility evaluations, and the full platform."}
+            </p>
+            {missingFields.length > 0 && (
+              <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-amber-800">
+                {language === "hi" ? "अपेक्षित विवरण" : language === "kn" ? "ಅಗತ್ಯವಿರುವ ವಿವರಗಳು" : "Missing required fields"}:{" "}
+                <span className="font-bold underline text-amber-950">{missingFields.join(", ")}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         <div data-tour="profile-header" className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
           <div className="text-lg font-semibold text-sahaya-green">{t(language, "tellOnlyNeeded")}</div>
           <p className="mt-1 text-sm text-slate-700">{t(language, "profileHelp")}</p>
         </div>
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <label className="text-sm font-semibold" htmlFor="profile-language">{t(language, "language")}</label>
-          <select id="profile-language" className="min-h-12 rounded-xl border p-3" value={language} onChange={(e) => setLanguage(e.target.value)}>
-            {SUPPORTED_LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.nativeLabel} ({lang.label})
-              </option>
-            ))}
-          </select>
+          <LanguageSelect id="profile-language" dataTour="profile-language-select" value={language} onChange={setLanguage} />
         </div>
+
+        {saveError && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {saveError}
+          </div>
+        )}
+
+        {message && (
+          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+            <div className="flex items-center gap-2 font-semibold">
+              <CheckCircle2 size={18} className="text-emerald-600" />
+              {message}
+            </div>
+            {profileIsComplete && (
+              <div className="mt-3">
+                <Link
+                  to="/dashboard"
+                  className="inline-flex items-center gap-2 rounded-xl bg-sahaya-green px-4 py-2 font-semibold text-white text-xs hover:bg-emerald-800 transition"
+                >
+                  {t(language, "dashboard")} <ArrowRight size={14} />
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+
         <ProfileForm
           initialValue={profile}
           submitLabel={t(language, "saveProfile")}
           onSubmit={async (nextProfile) => {
-            setProfile(nextProfile);
-            await api.put("/api/profile", { ...nextProfile, preferred_language: language, consent_given: true });
-            setMessage(t(language, "profileSaved"));
+            setSaveError("");
+            setMessage("");
+            try {
+              const res = await api.put("/api/profile", {
+                ...nextProfile,
+                preferred_language: language,
+                consent_given: true,
+              });
+              const updated = {
+                ...nextProfile,
+                onboarding_completed: res.data.onboarding_completed,
+              };
+              setProfile(updated);
+              await refreshSession();
+              if (isProfileComplete(updated)) {
+                setMessage(
+                  language === "hi"
+                    ? "प्रोफ़ाइल सफलतापूर्वक सहेजी गई! अब आपका खाता पूरी तरह सक्रिय है।"
+                    : language === "kn"
+                    ? "ಪ್ರೊಫೈಲ್ ಯಶಸ್ವಿಯಾಗಿ ಉಳಿಸಲಾಗಿದೆ! ಈಗ ನಿಮ್ಮ ಖಾತೆ ಸಂಪೂರ್ಣವಾಗಿ ಸಕ್ರಿಯವಾಗಿದೆ."
+                    : "Profile completed successfully! You now have full access to all features."
+                );
+              } else {
+                setMessage(t(language, "profileSaved"));
+              }
+            } catch (err: any) {
+              setSaveError(err?.response?.data?.detail || "Failed to save profile. Please check your inputs.");
+            }
           }}
         />
       </SectionCard>
@@ -94,7 +173,7 @@ export function ProfilePage() {
               ))}
             </div>
           </div>
-          <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+          <div data-tour="profile-never-stored" className="rounded-2xl border border-red-100 bg-red-50 p-4">
             <h3 className="font-semibold text-red-900">{t(language, "whatNeverStored")}</h3>
             <ul className="mt-3 space-y-2 text-sm text-red-950">
               {neverStored.map((item: string) => (

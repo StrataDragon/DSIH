@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { api } from "../services/api";
 import type { EligibilityProfile, NotificationItem, Scheme, User } from "../types";
+import { resetWelcomeVoice } from "../utils/welcomeVoice";
 
 type AppContextValue = {
   schemes: Scheme[];
@@ -12,6 +13,7 @@ type AppContextValue = {
   refreshSchemes: () => Promise<void>;
   personas: Record<string, { label: string; profile: EligibilityProfile }>;
   loadPersona: (key: string) => void;
+  authLoading: boolean;
   token: string | null;
   user: User | null;
   notifications: NotificationItem[];
@@ -19,6 +21,7 @@ type AppContextValue = {
   signup: (payload: Record<string, unknown>) => Promise<string | null>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -29,7 +32,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState(sessionStorage.getItem("tech-sahaya-language") || "en");
   const [offline, setOffline] = useState(!navigator.onLine);
   const [personas, setPersonas] = useState<Record<string, { label: string; profile: EligibilityProfile }>>({});
-  const [token, setToken] = useState<string | null>(sessionStorage.getItem("tech-sahaya-token") || localStorage.getItem("tech-sahaya-token"));
+  const initialToken = sessionStorage.getItem("tech-sahaya-token") || localStorage.getItem("tech-sahaya-token");
+  const [token, setToken] = useState<string | null>(initialToken);
+  const [authLoading, setAuthLoading] = useState<boolean>(Boolean(initialToken));
   const [user, setUser] = useState<User | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
@@ -52,7 +57,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (token) {
-      refreshSession().catch(() => logout());
+      setAuthLoading(true);
+      refreshSession()
+        .catch(() => logout())
+        .finally(() => setAuthLoading(false));
+    } else {
+      setAuthLoading(false);
     }
   }, [token]);
 
@@ -118,14 +128,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = async (payload: { email: string; password: string; remember_session: boolean }) => {
+    setAuthLoading(true);
     try {
       const response = await api.post("/api/auth/login", payload);
       persistToken(response.data.token, payload.remember_session);
       setUser(response.data.user);
       setLanguage(response.data.user.preferred_language);
+      await Promise.all([refreshNotifications(), refreshProfile()]);
       return null;
     } catch (error: any) {
       return error?.response?.data?.detail || "Login failed";
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -139,6 +153,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    resetWelcomeVoice(user?.id);
     try {
       if (token) await api.post("/api/auth/logout");
     } catch {
@@ -150,6 +165,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setNotifications([]);
     setProfile({ available_documents: [] });
+    setAuthLoading(false);
   };
 
   const loadPersona = (key: string) => {
@@ -158,7 +174,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AppContext.Provider value={{ schemes, profile, setProfile, language, setLanguage, offline, refreshSchemes, personas, loadPersona, token, user, notifications, login, signup, logout, refreshSession }}>
+    <AppContext.Provider value={{ schemes, profile, setProfile, language, setLanguage, offline, refreshSchemes, personas, loadPersona, authLoading, token, user, notifications, login, signup, logout, refreshSession, refreshProfile }}>
       {children}
     </AppContext.Provider>
   );

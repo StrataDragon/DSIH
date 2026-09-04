@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, FileUp, XCircle } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { ProfileForm } from "../components/ProfileForm";
 import { SectionCard } from "../components/SectionCard";
 import { useAppContext } from "../context/AppContext";
@@ -10,17 +10,26 @@ import { getLocalizedScheme } from "../utils/schemeLocalization";
 
 export function EligibilityPage() {
   const { profile, setProfile, schemes, language } = useAppContext();
-  const [schemeId, setSchemeId] = useState("pm-kisan");
+  const location = useLocation();
+  const [schemeId, setSchemeId] = useState(location.state?.prefillScheme || "pm-kisan");
   const [result, setResult] = useState<any | null>(null);
 
   const localizedSchemes = schemes.map((s) => getLocalizedScheme(s, language));
+  const schemeSelectLabel =
+    language === "hi"
+      ? "मूल्यांकन के लिए योजना चुनें"
+      : language === "kn"
+      ? "ಮೌಲ್ಯಮಾಪನ ಮಾಡಲು ಯೋಜನೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ"
+      : "Select Scheme to Evaluate";
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
       <SectionCard title={t(language, "eligibilityProfile")}>
         <div className="mb-4" data-tour="eligibility-scheme-select">
-          <label htmlFor="eligibility-scheme" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Select Scheme to Evaluate</label>
-          <select id="eligibility-scheme" className="min-h-12 w-full rounded-xl border p-3 bg-white" value={schemeId} onChange={(e) => setSchemeId(e.target.value)}>
+          <label htmlFor="eligibility-scheme" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            {schemeSelectLabel}
+          </label>
+          <select id="eligibility-scheme" data-tour="eligibility-scheme-select" className="min-h-12 w-full rounded-xl border p-3 bg-white" value={schemeId} onChange={(e) => setSchemeId(e.target.value)}>
             {localizedSchemes.map((scheme) => (
               <option key={scheme.id} value={scheme.id}>
                 {scheme.name} ({scheme.category})

@@ -10,7 +10,7 @@ export function PrivacyPage() {
   const [message, setMessage] = useState("");
   return (
     <div className="space-y-4 rounded-3xl bg-white p-6 shadow-card">
-      <h1 className="text-3xl font-bold">Privacy Center</h1>
+      <h1 data-tour="privacy-title" className="text-3xl font-bold">Privacy Center</h1>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border p-4"><div className="font-semibold">What We Collect</div><div className="mt-2 text-sm text-slate-600">Only minimum information required for welfare assistance.</div></div>
         <div className="rounded-2xl border p-4"><div className="font-semibold">What We Never Store</div><div className="mt-2 text-sm text-slate-600">Full Aadhaar number, biometric data, unnecessary bank information, raw identity documents.</div></div>
@@ -20,7 +20,7 @@ export function PrivacyPage() {
       <div className="space-y-3 rounded-2xl border p-4">
         <div className="font-semibold">Your Controls</div>
         <div className="flex flex-wrap gap-3">
-          <button onClick={() => setMessage("Your data export request has been prepared.")} className="min-h-12 rounded-xl border px-4">Download My Data</button>
+          <button data-tour="privacy-download-button" onClick={() => setMessage("Your data export request has been prepared.")} className="min-h-12 rounded-xl border px-4">Download My Data</button>
           <button onClick={async () => { await api.post("/api/consent", { consent_version: "v1", selected_language: "en", purpose: "withdrawal", consent_given: false }); setMessage("Consent withdrawn."); }} className="min-h-12 rounded-xl border px-4">Withdraw Consent</button>
         </div>
         <div className="rounded-2xl bg-red-50 p-4">

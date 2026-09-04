@@ -11,7 +11,7 @@ export function NotificationsPage() {
         <div className="flex items-center gap-3">
           <Bell className="text-sahaya-green" />
           <div>
-            <h1 className="text-2xl font-bold">{t(language, "notifications")}</h1>
+            <h1 data-tour="notifications-title" className="text-2xl font-bold">{t(language, "notifications")}</h1>
             <p className="mt-1 text-sm text-slate-600">{t(language, "notificationHelp")}</p>
           </div>
         </div>

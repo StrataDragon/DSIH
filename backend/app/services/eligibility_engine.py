@@ -52,11 +52,23 @@ class EligibilityEngine:
         total_checks = max(len(matched) + len(failed) + len(missing), 1)
         score = int((len(matched) / total_checks) * 100)
 
+        reason_code = None
+        verified = None
+
         if failed:
-            status = "not_eligible"
-            eligible = False
-            explanation = f"Deterministic rule evaluation found {len(failed)} unmet condition(s)."
-            next_action = "Review failed conditions or explore alternative schemes."
+            doc_only_failure = len(failed) == 1 and any("At least one of these documents is required" in f for f in failed)
+            if doc_only_failure:
+                status = "document_verification_required"
+                eligible = False
+                explanation = "Core criteria are satisfied, but an official verified document is required to establish eligibility."
+                next_action = "Please upload an official digitally-signed or verified document to establish eligibility."
+                reason_code = "DOCUMENT_AUTHENTICITY_FAILED"
+                verified = False
+            else:
+                status = "not_eligible"
+                eligible = False
+                explanation = f"Deterministic rule evaluation found {len(failed)} unmet condition(s)."
+                next_action = "Review failed conditions or explore alternative schemes."
         elif missing:
             status = "needs_more_information"
             eligible = False
@@ -67,6 +79,7 @@ class EligibilityEngine:
             eligible = True
             explanation = "All deterministic eligibility conditions were satisfied."
             next_action = "Prepare the required documents and continue to the application journey."
+            verified = True
 
         return EligibilityResult(
             eligible=eligible,
@@ -78,6 +91,8 @@ class EligibilityEngine:
             explanation=explanation,
             next_action=next_action,
             alternative_schemes=alternative_schemes if not eligible else [],
+            verified=verified,
+            reason_code=reason_code,
         )
 
     def _check_min_max(self, field: str, value: float | int | None, rule: dict[str, Any], matched: list[str], failed: list[str], missing: list[str]) -> None:

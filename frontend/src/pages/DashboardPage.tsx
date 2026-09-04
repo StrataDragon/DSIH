@@ -1,6 +1,6 @@
-import { ArrowRight, CheckCircle2, Languages, Mic, Play, ShieldCheck, Square, Volume2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronRight, Languages, Mic, Play, Search, ShieldCheck, Sparkles, Square, Users, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { OnboardingChecklist, type OnboardingStep } from "../components/OnboardingChecklist";
 import { SchemeCard } from "../components/SchemeCard";
 import { SectionCard } from "../components/SectionCard";
@@ -15,7 +15,7 @@ const getDashboardSummaryAutoplayKey = (userId?: string) =>
   `sahaya_dashboard_summary_autoplayed:${userId || "guest"}`;
 
 export function DashboardPage() {
-  const { profile, user, notifications, language } = useAppContext();
+  const { profile, setProfile, user, notifications, language, schemes } = useAppContext();
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [gaps, setGaps] = useState<any[]>([]);
   const [eligibleSchemes, setEligibleSchemes] = useState<Scheme[]>([]);
@@ -23,6 +23,9 @@ export function DashboardPage() {
   const [summaryAudio, setSummaryAudio] = useState<{ summary: string; base64: string | null; mime: string } | null>(null);
   const [summaryPlaying, setSummaryPlaying] = useState(false);
   const [summaryAutoplayBlocked, setSummaryAutoplayBlocked] = useState(false);
+  const [activeUsersCount, setActiveUsersCount] = useState<number | null>(null);
+  const [lifeEventModal, setLifeEventModal] = useState<string | null>(null);
+  const [lifeEventData, setLifeEventData] = useState<any>({});
   const summaryAudioRef = useRef<HTMLAudioElement | null>(null);
   const summaryRequestedKeys = useRef(new Set<string>());
 
@@ -93,10 +96,18 @@ export function DashboardPage() {
       .catch(() => {
         if (isMounted) setEligibleError(t(language, "eligibleSchemesError"));
       });
+    
+    // Fetch public stats
+    api.get("/api/stats").then((res) => {
+      if (res.data && res.data.total_users !== undefined) {
+        setActiveUsersCount(res.data.total_users);
+      }
+    }).catch(() => undefined);
 
     return () => {
       isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eligibilityKey, profile, language, user?.id, user?.full_name]);
 
   const playSummary = () => {
@@ -237,13 +248,54 @@ export function DashboardPage() {
     },
   ];
 
+  const navigate = useNavigate();
+
+  const handleLifeEvent = (type: string) => {
+    setLifeEventModal(type);
+    setLifeEventData({});
+  };
+
+  const submitLifeEvent = async () => {
+    let newProfile = { ...profile };
+    let targetSchemeId = "pm-kisan";
+
+    if (lifeEventModal === 'baby') {
+      newProfile = {
+        ...newProfile,
+        family_members: [...(newProfile.family_members || []), { name: lifeEventData.name || "Baby", relationship: "daughter", age: 0, gender: "female", occupation: "dependent" }]
+      };
+      targetSchemeId = "sukanya-samriddhi";
+    } else if (lifeEventModal === 'crop') {
+      newProfile = {
+        ...newProfile,
+        occupation: "farmer"
+      };
+      targetSchemeId = "pm-kisan";
+    } else if (lifeEventModal === 'age') {
+      newProfile = {
+        ...newProfile,
+        age: 60
+      };
+      targetSchemeId = "pm-sym";
+    }
+    
+    setLifeEventModal(null);
+    setProfile(newProfile);
+    try {
+      await api.put("/api/profile", newProfile);
+    } catch(e) {
+      // ignore if unauthenticated or error
+    }
+    navigate("/eligibility", { state: { prefillScheme: targetSchemeId } });
+  };
+
   return (
     <div className="space-y-5">
       <section className="rounded-3xl bg-white p-5 shadow-card">
         <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-sahaya-saffron">{t(language, "dashboardTitle")}</p>
-            <h1 className="mt-1 text-2xl font-bold text-sahaya-ink md:text-3xl">
+            <h1 data-tour="dashboard-title" className="mt-1 text-2xl font-bold text-sahaya-ink md:text-3xl">
               {t(language, "goodMorning")}, {user?.full_name || (language === "hi" ? "नागरिक" : language === "kn" ? "ನಾಗರಿಕ" : "Citizen")}
             </h1>
             <p className="mt-2 max-w-2xl text-slate-600">{t(language, "dashboardSubtitle")}</p>
@@ -292,36 +344,111 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <SectionCard title={t(language, "welfareReadiness")}>
-          <div className="flex items-end gap-3">
-            <div className="text-5xl font-bold text-sahaya-green">{readiness}%</div>
-            <div className="pb-2 text-sm text-slate-600">
-              {language === "hi" ? "आवेदन के लिए तैयार" : language === "kn" ? "ಅರ್ಜಿಗೆ ಸಿದ್ಧವಾಗಿದೆ" : "ready for guided applications"}
-            </div>
+      {/* Stat Cards */}
+      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm flex items-center gap-4">
+          <div className="rounded-full bg-emerald-100 p-3 text-emerald-600"><Languages size={24} /></div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase">Languages</div>
+            <div className="text-xl font-bold text-slate-900">{SUPPORTED_LANGUAGES.length}</div>
+            <div className="text-xs text-slate-500 line-clamp-1">{SUPPORTED_LANGUAGES.map(l => l.nativeLabel).join(", ")}</div>
           </div>
-          <div className="mt-4 h-3 overflow-hidden rounded-full bg-stone-100">
-            <div className="h-full rounded-full bg-sahaya-green" style={{ width: `${readiness}%` }} />
+        </div>
+        <div className="rounded-2xl border border-purple-100 bg-white p-5 shadow-sm flex items-center gap-4">
+          <div className="rounded-full bg-purple-100 p-3 text-purple-600"><ShieldCheck size={24} /></div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase">Privacy First</div>
+            <div className="text-xl font-bold text-slate-900">100%</div>
+            <div className="text-xs text-slate-500">Your data, your control</div>
           </div>
-          <div className="mt-4 grid gap-2 text-sm">
-            {readinessFactors.map((factor) => (
-              <div key={factor.label} className="flex items-center justify-between gap-3 rounded-xl border p-3">
-                <span className="flex items-center gap-2">
-                  <CheckCircle2 className={factor.ready ? "text-sahaya-green" : "text-slate-300"} size={18} /> {factor.label}
-                </span>
-                <span className={factor.ready ? "font-semibold text-sahaya-green" : "text-slate-500"}>
-                  {factor.ready ? (language === "hi" ? "तैयार" : language === "kn" ? "ಸಿದ್ಧ" : "Ready") : factor.action}
-                </span>
-              </div>
-            ))}
+        </div>
+        <div className="rounded-2xl border border-rose-100 bg-white p-5 shadow-sm flex items-center gap-4">
+          <div className="rounded-full bg-rose-100 p-3 text-rose-600"><Users size={24} /></div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase">Active Users</div>
+            <div className="text-xl font-bold text-slate-900">{activeUsersCount !== null ? activeUsersCount : "..."}</div>
+            <div className="text-xs text-slate-500">Across Karnataka</div>
           </div>
-        </SectionCard>
+        </div>
+        <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm flex items-center gap-4">
+          <div className="rounded-full bg-orange-100 p-3 text-orange-600"><Search size={24} /></div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase">Schemes Available</div>
+            <div className="text-xl font-bold text-slate-900">{schemes.length > 0 ? schemes.length : "150+"}</div>
+            <div className="text-xs text-slate-500">Central & State</div>
+          </div>
+        </div>
+      </section>
 
-        <OnboardingChecklist
-          steps={onboardingSteps}
-          title={t(language, "gettingStarted")}
-          subtitle={language === "hi" ? "कल्याण लाभ प्राप्त करने के लिए महत्वपूर्ण चरण" : language === "kn" ? "ಕಲ್ಯಾಣ ಪ್ರಯೋಜನಗಳನ್ನು ಪಡೆಯಲು ಪ್ರಮುಖ ಹಂತಗಳು" : "Key steps to maximize your welfare entitlement"}
-        />
+      {/* Predictive Life Events */}
+      <section className="rounded-3xl bg-white p-6 shadow-card border border-slate-100">
+        <h2 className="text-xl font-bold text-slate-900 mb-2 flex items-center gap-2"><Sparkles className="text-sahaya-saffron" size={24} /> Predictive Life Events</h2>
+        <p className="text-sm text-slate-600 mb-6">Update your life events to instantly discover new government schemes you automatically qualify for.</p>
+        
+        <div className="grid gap-4 md:grid-cols-3">
+          <button 
+            onClick={() => handleLifeEvent('baby')}
+            className="flex flex-col items-center justify-center p-6 rounded-2xl border-2 border-dashed border-pink-200 bg-pink-50 hover:bg-pink-100 transition group"
+          >
+            <div className="h-12 w-12 rounded-full bg-pink-200 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">👶</div>
+            <div className="font-bold text-pink-900">Just had a baby girl</div>
+            <div className="text-xs text-pink-700 mt-1">Tap to update profile</div>
+          </button>
+          
+          <button 
+            onClick={() => handleLifeEvent('crop')}
+            className="flex flex-col items-center justify-center p-6 rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50 hover:bg-amber-100 transition group"
+          >
+            <div className="h-12 w-12 rounded-full bg-amber-200 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">🌾</div>
+            <div className="font-bold text-amber-900">Crop Failure / Loss</div>
+            <div className="text-xs text-amber-700 mt-1">Tap to update profile</div>
+          </button>
+
+          <button 
+            onClick={() => handleLifeEvent('age')}
+            className="flex flex-col items-center justify-center p-6 rounded-2xl border-2 border-dashed border-blue-200 bg-blue-50 hover:bg-blue-100 transition group"
+          >
+            <div className="h-12 w-12 rounded-full bg-blue-200 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition">🎂</div>
+            <div className="font-bold text-blue-900">Turned 60 Years Old</div>
+            <div className="text-xs text-blue-700 mt-1">Tap to update profile</div>
+          </button>
+        </div>
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div data-tour="dashboard-readiness-circle">
+          <SectionCard title={t(language, "welfareReadiness")}>
+            <div className="flex items-end gap-3">
+              <div className="text-5xl font-bold text-sahaya-green">{readiness}%</div>
+              <div className="pb-2 text-sm text-slate-600">
+                {language === "hi" ? "आवेदन के लिए तैयार" : language === "kn" ? "ಅರ್ಜಿಗೆ ಸಿದ್ಧವಾಗಿದೆ" : "ready for guided applications"}
+              </div>
+            </div>
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-stone-100">
+              <div className="h-full rounded-full bg-sahaya-green" style={{ width: `${readiness}%` }} />
+            </div>
+            <div className="mt-4 grid gap-2 text-sm">
+              {readinessFactors.map((factor) => (
+                <div key={factor.label} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                  <span className="flex items-center gap-2">
+                    <CheckCircle2 className={factor.ready ? "text-sahaya-green" : "text-slate-300"} size={18} /> {factor.label}
+                  </span>
+                  <span className={factor.ready ? "font-semibold text-sahaya-green" : "text-slate-500"}>
+                    {factor.ready ? (language === "hi" ? "तैयार" : language === "kn" ? "ಸಿದ್ಧ" : "Ready") : factor.action}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
+
+        <div data-tour="dashboard-checklist">
+          <OnboardingChecklist
+            steps={onboardingSteps}
+            title={t(language, "gettingStarted")}
+            subtitle={language === "hi" ? "कल्याण लाभ प्राप्त करने के लिए महत्वपूर्ण चरण" : language === "kn" ? "ಕಲ್ಯಾಣ ಪ್ರಯೋಜನಗಳನ್ನು ಪಡೆಯಲು ಪ್ರಮುಖ ಹಂತಗಳು" : "Key steps to maximize your welfare entitlement"}
+          />
+        </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
@@ -390,6 +517,74 @@ export function DashboardPage() {
           </div>
         </SectionCard>
       </div>
+
+      {lifeEventModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-bold mb-4 text-slate-900">
+              {lifeEventModal === 'baby' && "👶 Congratulations on your baby girl!"}
+              {lifeEventModal === 'crop' && "🌾 Report Crop Loss"}
+              {lifeEventModal === 'age' && "🎂 Welcome to the 60s Club!"}
+            </h2>
+            
+            <p className="text-sm text-slate-600 mb-5">
+              Please provide a few details so we can find exactly which new government schemes you automatically qualify for.
+            </p>
+
+            <div className="space-y-4 mb-6">
+              {lifeEventModal === 'baby' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">Baby's Name</label>
+                    <input type="text" className="w-full border rounded-xl px-4 py-2 focus:border-sahaya-green outline-none" placeholder="Enter name" onChange={(e) => setLifeEventData({ ...lifeEventData, name: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">Date of Birth</label>
+                    <input type="date" className="w-full border rounded-xl px-4 py-2 focus:border-sahaya-green outline-none" defaultValue={new Date().toISOString().split('T')[0]} />
+                  </div>
+                </>
+              )}
+
+              {lifeEventModal === 'crop' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">Crop Type</label>
+                    <select className="w-full border rounded-xl px-4 py-2 focus:border-sahaya-green outline-none">
+                      <option>Rice / Paddy</option>
+                      <option>Wheat</option>
+                      <option>Cotton</option>
+                      <option>Sugarcane</option>
+                      <option>Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">Estimated Loss Date</label>
+                    <input type="date" className="w-full border rounded-xl px-4 py-2 focus:border-sahaya-green outline-none" />
+                  </div>
+                </>
+              )}
+
+              {lifeEventModal === 'age' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">Confirm Date of Birth</label>
+                    <input type="date" className="w-full border rounded-xl px-4 py-2 focus:border-sahaya-green outline-none" />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setLifeEventModal(null)} className="flex-1 rounded-xl bg-slate-100 py-3 font-bold text-slate-700 hover:bg-slate-200">
+                Cancel
+              </button>
+              <button onClick={submitLifeEvent} className="flex-1 rounded-xl bg-sahaya-green py-3 font-bold text-white hover:bg-sahaya-green/90">
+                Update & Check Schemes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

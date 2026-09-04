@@ -10,6 +10,12 @@ const fallbackSteps: Record<string, string[]> = {
   en: ["Discover", "Eligibility", "Documents", "Apply", "Verification", "Approval", "Benefit", "Renewal"],
   hi: ["खोजें", "पात्रता", "दस्तावेज़", "आवेदन", "सत्यापन", "स्वीकृति", "लाभ", "नवीनीकरण"],
   kn: ["ಹುಡುಕಿ", "ಅರ್ಹತೆ", "ದಾಖಲೆಗಳು", "ಅರ್ಜಿ", "ಪರಿಶೀಲನೆ", "ಮಂಜೂರಾತಿ", "ಪ್ರಯೋಜನ", "ನವೀಕರಣ"],
+  te: ["కనుగొనండి", "అర్హత", "పత్రాలు", "దరఖాస్తు", "ధృవీకరణ", "ఆమోదం", "ప్రయోజనం", "పునరుద్ధరణ"],
+  ta: ["கண்டறியவும்", "தகுதி", "ஆவணங்கள்", "விண்ணப்பம்", "சரிபார்ப்பு", "ஒப்புதல்", "பயன்", "புதுப்பித்தல்"],
+  ml: ["കണ്ടെത്തുക", "യോഗ്യത", "രേഖകൾ", "അപേക്ഷ", "പരിശോധന", "അംഗീകാരം", "ആനുകൂല്യം", "പുതുക്കൽ"],
+  bn: ["অনুসন্ধান", "যোগ্যতা", "নথিপত্র", "আবেদন", "যাচাইকরণ", "অনুমোদন", "সুবিধা", "নবায়ন"],
+  mr: ["शोधा", "पात्रता", "कागदपत्रे", "अर्ज", "पडताळणी", "मंजुरी", "लाभ", "नूतनीकरण"],
+  gu: ["શોધો", "પાત્રતા", "દસ્તાવેજો", "અરજી", "ચકાસણી", "મંજૂરી", "લાભ", "નવીકરણ"],
 };
 
 export function JourneyPage() {
@@ -28,10 +34,11 @@ export function JourneyPage() {
     <div className="space-y-5">
       <section className="rounded-3xl bg-white p-6 shadow-card">
         <p className="text-sm font-semibold uppercase tracking-wide text-sahaya-saffron">{t(language, "welfareJourney")}</p>
-        <h1 className="mt-1 text-3xl font-bold text-sahaya-ink">{t(language, "welfareJourney")}</h1>
+        <h1 data-tour="journey-title" className="mt-1 text-3xl font-bold text-sahaya-ink">{t(language, "welfareJourney")}</h1>
         <p className="mt-2 max-w-3xl text-slate-600">{t(language, "journeyUse")}</p>
       </section>
-      <SectionCard title={t(language, "welfareJourney")}>
+      <div data-tour="journey-stage-card">
+        <SectionCard title={t(language, "welfareJourney")}>
         {loading && <div className="grid gap-3">{[1, 2, 3, 4].map((item) => <div key={item} className="h-24 animate-pulse rounded-2xl bg-stone-100" />)}</div>}
         {!loading && journey.length === 0 && (
           <div className="space-y-5">
@@ -74,6 +81,7 @@ export function JourneyPage() {
           </div>
         )}
       </SectionCard>
+      </div>
     </div>
   );
 }

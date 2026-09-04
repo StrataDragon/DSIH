@@ -255,9 +255,10 @@ export function AskPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <SectionCard
-        title={t(language, "askTitle")}
-      >
+      <div data-tour="chat-title">
+        <SectionCard
+          title={t(language, "askTitle")}
+        >
         <div className="space-y-4">
 
           {/* Input & Voice Bar */}
@@ -280,6 +281,7 @@ export function AskPage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                data-tour="chat-mic-button"
                 onClick={recording ? stopVoiceRecording : startVoiceRecording}
                 className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-5 font-semibold transition shadow-sm ${
                   recording
@@ -340,6 +342,7 @@ export function AskPage() {
           </div>
         </div>
       </SectionCard>
+      </div>
 
       {/* Answer & Evidence Display Card */}
       {response && (

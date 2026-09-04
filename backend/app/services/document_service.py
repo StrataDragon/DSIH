@@ -18,6 +18,7 @@ from app.core.config import get_settings
 from app.core.redis_client import ephemeral_store
 from app.models.db_models import DocumentRecord, User
 from app.services.data_loader import load_ocr_keywords
+from app.services.document_verification_service import document_verification_service
 
 logger = logging.getLogger("techsahaya.ocr")
 settings = get_settings()
@@ -226,12 +227,35 @@ class DocumentService:
     
             # In-memory ephemeral OCR (never saved to disk, zero external APIs)
             extracted_fields = self._extract_ephemeral_fields(content, content_type, doc_type, language=language)
+
+            # Defense-in-depth Authenticity Verification Gate
+            qr_text = extracted_fields.get("qr_text")
+            if not qr_text:
+                # Heuristic search in extracted OCR lines for potential verification URL
+                url_match = re.search(r"https?://[^\s\"'>]+", str(extracted_fields))
+                if url_match:
+                    qr_text = url_match.group(0)
+
+            verification_result = document_verification_service.verify(
+                content,
+                content_type,
+                doc_type,
+                extracted_fields,
+                qr_text=qr_text,
+            )
+
+            verification_state = verification_result["status"]
+            eligibility_usable = verification_result.get("eligibility_usable", False)
+            doc_status = "verified" if eligibility_usable else "rejected" if verification_state == "REJECTED" else "review_required"
     
             masked_fields = {
                 "document_type": doc_type,
                 "mime_type": content_type,
                 "name_hint": user.full_name.split(" ")[0] if user.full_name else "Citizen",
                 "identifier_masked": "XXXX-XXXX",
+                "verification_status": verification_state,
+                "reason_code": verification_result.get("reason_code"),
+                "eligibility_usable": eligibility_usable,
             }
             document = DocumentRecord(
                 user_id=user.id,
@@ -248,12 +272,17 @@ class DocumentService:
             db.commit()
             db.refresh(document)
     
-            # Store derived structured data in Redis with short ephemeral TTL (e.g. 5 minutes)
+            # Store derived structured data in Redis with short ephemeral TTL (300 seconds)
             ephemeral_payload = {
                 "document_id": document.id,
                 "user_id": user.id,
                 "document_type": doc_type,
+                "verification": verification_result,
+                "verification_status": verification_state,
+                "verification_reason_code": verification_result.get("reason_code"),
+                "eligibility_usable": eligibility_usable,
                 "extracted_fields": extracted_fields,
+                "quarantined_fields": {} if eligibility_usable else extracted_fields,
                 "field_confidences": extracted_fields.get("field_confidences", {}),
                 "ocr_quality": extracted_fields.get("ocr_quality", "good"),
                 "ocr_confidence_score": extracted_fields.get("ocr_confidence_score"),
@@ -261,6 +290,9 @@ class DocumentService:
             }
             ephemeral_store.set(f"doc:{document.id}", ephemeral_payload, ttl_seconds=settings.redis_ephemeral_ttl)
             setattr(document, "ephemeral_extracted", extracted_fields)
+            setattr(document, "verification", verification_result)
+            setattr(document, "verification_status", verification_state)
+            setattr(document, "eligibility_usable", eligibility_usable)
 
             return document
         except HTTPException:

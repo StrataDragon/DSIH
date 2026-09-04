@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 import { api } from "../services/api";
+import { isProfileComplete } from "../utils/profileUtils";
 
 export function LoginPage() {
   const { login } = useAppContext();
@@ -28,7 +29,8 @@ export function LoginPage() {
             return;
           }
           const profileResponse = await api.get("/api/profile");
-          navigate(profileResponse.data.onboarding_completed ? redirect : "/profile-setup");
+          const complete = isProfileComplete(profileResponse.data);
+          navigate(complete ? redirect : "/profile");
         }}>
           <input className="min-h-12 w-full rounded-xl border px-4" placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <div className="relative">

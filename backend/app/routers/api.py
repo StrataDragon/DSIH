@@ -81,9 +81,15 @@ async def onboarding_welcome_audio(
     user: User = Depends(get_current_user),
 ):
     welcome_messages = {
+        "en": "Welcome to Tech Sahaya. Please complete your profile so we can find government schemes that you may be eligible for.",
         "hi": "टेक सहाय में आपका स्वागत है। कृपया अपनी प्रोफ़ाइल पूरी करें ताकि हम आपके लिए उपयुक्त सरकारी योजनाएं खोज सकें।",
         "kn": "ಟೆಕ್ ಸಹಾಯಕ್ಕೆ ಸ್ವಾಗತ. ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಪೂರ್ಣಗೊಳಿಸಿ, ಇದರಿಂದ ನಿಮಗೆ ಸೂಕ್ತವಾದ ಸರ್ಕಾರಿ ಯೋಜನೆಗಳನ್ನು ಹುಡುಕಲು ನಮಗೆ ಸಾಧ್ಯವಾಗುತ್ತದೆ.",
-        "en": "Welcome to Tech Sahaya. Please complete your profile so we can find government schemes that you may be eligible for.",
+        "te": "టెక్ సహాయకు స్వాగతం. దయచేసి మీ ప్రొఫైల్‌ను పూర్తి చేయండి, తద్వారా మీరు అర్హులైన ప్రభుత్వ పథకాలను మేము కనుగొనగలము.",
+        "ta": "டெக் சகாயாவிற்கு வரவேற்கிறோம். தயவுசெய்து உங்கள் சுயவிவரத்தை நிரப்பவும், இதன் மூலம் நீங்கள் தகுதியான அரசு திட்டங்களை நாங்கள் கண்டறிய முடியும்.",
+        "ml": "ടെക് സഹായയിലേക്ക് സ്വാഗതം. നിങ്ങൾക്ക് അർഹമായ സർക്കാർ പദ്ധതികൾ കണ്ടെത്താനായി പ്രൊഫൈൽ പൂർത്തിയാക്കുക.",
+        "bn": "টেক সহায়ে স্বাগতম। দয়া করে আপনার প্রোফাইল সম্পূর্ণ করুন যাতে আমরা আপনার জন্য উপযুক্ত সরকারি প্রকল্প খুঁজে পেতে পারি।",
+        "mr": "टेक सहाय्य मध्ये आपले स्वागत आहे. कृपया आपले प्रोफाईल पूर्ण करा जेणेकरून आम्ही आपल्यासाठी योग्य सरकारी योजना शोधू शकू.",
+        "gu": "ટેક સહાયમાં આપનું સ્વાગત છે. કૃપા કરીને તમારી પ્રોફાઇલ પૂર્ણ કરો જેથી અમે તમને પાત્ર સરકારી યોજનાઓ શોધી શકીએ.",
     }
     language_key = language[:2].lower()
     message = welcome_messages.get(language_key, welcome_messages["en"])
@@ -260,31 +266,61 @@ async def upload_document(
         raise HTTPException(status_code=413, detail="File too large")
     selected_language = language or user.preferred_language or "en"
     document = document_service.process_upload(db, user, file, content, declared_type=document_type, language=selected_language)
+    
+    verification = getattr(document, "verification", {})
+    verification_status = verification.get("status", "REVIEW_REQUIRED")
+    eligibility_usable = verification.get("eligibility_usable", False)
+
     profile = profile_service.get_or_create(db, user)
     existing_documents = profile.available_documents or []
-    if document.document_type not in existing_documents:
+    
+    # CRITICAL SECURITY GATE:
+    # Only VERIFIED documents may enter profile.available_documents for eligibility!
+    if eligibility_usable and document.document_type not in existing_documents:
         profile.available_documents = [*existing_documents, document.document_type]
         db.add(profile)
         db.commit()
-    audit_service.log(db, "document_uploaded", f"{document.document_type} uploaded", user.id, get_user_role(db, user.id), f"document:{document.id}", request)
+
+    audit_service.log(
+        db,
+        "document_uploaded",
+        f"{document.document_type} status={verification_status}",
+        user.id,
+        get_user_role(db, user.id),
+        f"document:{document.id}",
+        request,
+    )
     ephemeral_extracted = getattr(document, "ephemeral_extracted", {})
     ocr_quality = ephemeral_extracted.get("ocr_quality", "good")
     ocr_confidence = ephemeral_extracted.get("ocr_confidence_score")
 
-    if ocr_quality == "poor":
+    if verification_status == "REJECTED":
+        reupload_msg = verification.get("user_message") or (
+            "The document you uploaded may be fake or altered. "
+            "Please make sure you upload a verified/original document and try again."
+        )
+    elif ocr_quality == "poor":
         lang_key = selected_language[:2].lower()
         reupload_msg = REUPLOAD_PROMPTS.get(lang_key, REUPLOAD_PROMPTS["en"])
+    elif verification_status == "REVIEW_REQUIRED":
+        reupload_msg = (
+            "Document requires manual verification or an official digitally-signed copy "
+            "before it can unlock scheme eligibility."
+        )
     else:
-        reupload_msg = "Processed in memory and discarded. Only masked metadata is retained in DB; ephemeral OCR cached in Redis with short TTL."
+        reupload_msg = "Document verified successfully. It is now active for eligibility checks."
 
     return {
-        "status": "processed",
+        "status": "verified" if eligibility_usable else "rejected" if verification_status == "REJECTED" else "review_required",
         "document": document.id,
         "document_type": document.document_type,
+        "verification": verification,
+        "verification_status": verification_status,
+        "eligibility_usable": eligibility_usable,
         "available_documents": profile.available_documents,
         "ocr_quality": ocr_quality,
         "ocr_confidence_score": ocr_confidence,
-        "ephemeral_extracted": ephemeral_extracted,
+        "ephemeral_extracted": ephemeral_extracted if eligibility_usable else {},
         "ephemeral_ttl": settings.redis_ephemeral_ttl,
         "message": reupload_msg,
     }
@@ -424,12 +460,30 @@ async def eligible_schemes_summary_audio(
         scheme_text = ", ".join(names[:-1]) + f" और {names[-1]}"
     elif language_key == "kn":
         scheme_text = ", ".join(names[:-1]) + f" ಮತ್ತು {names[-1]}"
+    elif language_key == "te":
+        scheme_text = ", ".join(names[:-1]) + f" మరియు {names[-1]}"
+    elif language_key == "ta":
+        scheme_text = ", ".join(names[:-1]) + f" மற்றும் {names[-1]}"
+    elif language_key == "ml":
+        scheme_text = ", ".join(names[:-1]) + f" ഒപ്പം {names[-1]}"
+    elif language_key == "bn":
+        scheme_text = ", ".join(names[:-1]) + f" এবং {names[-1]}"
+    elif language_key == "mr":
+        scheme_text = ", ".join(names[:-1]) + f" आणि {names[-1]}"
+    elif language_key == "gu":
+        scheme_text = ", ".join(names[:-1]) + f" અને {names[-1]}"
     else:
         scheme_text = ", ".join(names[:-1]) + f" and {names[-1]}"
     messages = {
         "en": f"Hi {payload.user_name}, the schemes you are eligible for are {scheme_text}. Please read the details carefully.",
         "hi": f"नमस्ते {payload.user_name}, आप इन योजनाओं के लिए पात्र हैं: {scheme_text}। कृपया विवरण ध्यान से पढ़ें।",
         "kn": f"ನಮಸ್ಕಾರ {payload.user_name}, ನೀವು ಈ ಯೋಜನೆಗಳಿಗೆ ಅರ್ಹರಾಗಿದ್ದೀರಿ: {scheme_text}. ದಯವಿಟ್ಟು ವಿವರಗಳನ್ನು ಗಮನವಾಗಿ ಓದಿ.",
+        "te": f"నమస్కారం {payload.user_name}, మీరు ఈ పథకాలకు అర్హులు: {scheme_text}. దయచేసి వివరాలను జాగ్రత్తగా చదవండి.",
+        "ta": f"வணக்கம் {payload.user_name}, நீங்கள் தகுதியுடைய திட்டங்கள்: {scheme_text}. விவரங்களை கவனமாக படிக்கவும்.",
+        "ml": f"നമസ്കാരം {payload.user_name}, നിങ്ങൾ ഈ പദ്ധതികൾക്ക് അർഹരാണ്: {scheme_text}. ദയവായി വിവരങ്ങൾ ശ്രദ്ധാപൂർവ്വം വായിക്കുക.",
+        "bn": f"নমস্কার {payload.user_name}, আপনি যে স্কিমগুলির জন্য যোগ্য তা হল {scheme_text}। দয়া করে বিস্তারিত মনোযোগ সহকারে পড়ুন।",
+        "mr": f"नमस्कार {payload.user_name}, आपण या योजनांसाठी पात्र आहात: {scheme_text}. कृपया तपशील काळजीपूर्वक वाचा.",
+        "gu": f"નમસ્તે {payload.user_name}, તમે આ યોજનાઓ માટે પાત્ર છો: {scheme_text}. કૃપા કરીને વિગતો ધ્યાનથી વાંચો.",
     }
     message = messages.get(language_key, messages["en"])
     try:
@@ -479,6 +533,10 @@ def what_if(payload: WhatIfRequest, user: User = Depends(get_current_user)):
     scheme = next((item for item in load_schemes() if item.id == payload.scheme_id), None)
     if not scheme:
         raise HTTPException(status_code=404, detail="Scheme not found")
+    if payload.simulated_changes:
+        for field in ["income", "age", "landholding"]:
+            if field in payload.simulated_changes and isinstance(payload.simulated_changes[field], (int, float)):
+                payload.simulated_changes[field] = max(0, payload.simulated_changes[field])
     rule = load_rules()[payload.scheme_id]
     before = eligibility_engine.evaluate(payload.scheme_id, payload.current_profile, rule, scheme.alternative_scheme_ids)
     updated = payload.current_profile.model_copy(update=payload.simulated_changes)
@@ -527,6 +585,16 @@ def sources(scheme_id: str):
         "last_verified": scheme.last_verified,
         "evidence_policy": "Answers are generated only from verified evidence chunks and cited source metadata.",
     }
+
+
+@router.get("/schemes/{scheme_id}/rules")
+def scheme_rules(scheme_id: str):
+    from app.services.data_loader import load_rules
+    rules = load_rules()
+    rule = rules.get(scheme_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rules not found for scheme")
+    return rule
 
 
 @router.get("/personas")
@@ -602,6 +670,12 @@ def end_citizen_session(session_id: str, request: Request, user: User = Depends(
     audit_service.log(db, "csc_session_ended", session_id, user.id, "csc_operator", "csc_session", request)
     return {"status": "ended"}
 
+
+@router.get("/stats")
+def get_public_stats(db: Session = Depends(get_db)):
+    return {
+        "total_users": db.query(User).count()
+    }
 
 @router.get("/admin/dashboard")
 def admin_dashboard(user: User = Depends(require_role("admin")), db: Session = Depends(get_db)):

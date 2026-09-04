@@ -39,7 +39,7 @@ class EligibilityProfile(BaseModel):
 
 class EligibilityResult(BaseModel):
     eligible: bool
-    status: Literal["eligible", "not_eligible", "needs_more_information"]
+    status: Literal["eligible", "not_eligible", "needs_more_information", "document_verification_required"]
     matched: list[str]
     failed: list[str]
     missing: list[str]
@@ -47,6 +47,8 @@ class EligibilityResult(BaseModel):
     explanation: str
     next_action: str
     alternative_schemes: list[str] = Field(default_factory=list)
+    verified: bool | None = None
+    reason_code: str | None = None
 
 
 class CheckEligibilityRequest(BaseModel):

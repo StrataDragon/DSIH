@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileCheck2, FileText, RefreshCcw, ShieldCheck, UploadCloud } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Clock, FileCheck2, FileText, Loader2, RefreshCcw, ShieldCheck, UploadCloud } from "lucide-react";
 import { useAppContext } from "../context/AppContext";
 import { api } from "../services/api";
 import { t } from "../utils/i18n";
@@ -161,6 +161,12 @@ const commonDocuments = [
 export function DocumentsPage() {
   const { language, profile, setProfile } = useAppContext();
   const [documents, setDocuments] = useState<any[]>([]);
+  const [uploadStage, setUploadStage] = useState<string | null>(null);
+  const [verificationResult, setVerificationResult] = useState<{
+    status: "VERIFIED" | "REJECTED" | "REVIEW_REQUIRED";
+    message: string;
+    reason_code?: string;
+  } | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -174,6 +180,14 @@ export function DocumentsPage() {
   }, []);
 
   const langKey = (language || "en").toLowerCase();
+
+  const STAGE_LABELS: Record<string, string> = {
+    uploading: "Uploading file securely...",
+    safety: "Running malware, dimension & structural safety checks...",
+    authenticity: "Verifying cryptographic digital signatures & tamper signals...",
+    issuer: "Validating official government issuer records & QR codes...",
+    extracting: "Extracting verified attributes in-memory...",
+  };
 
   return (
     <div className="space-y-5">
@@ -238,18 +252,53 @@ export function DocumentsPage() {
                 setError(t(language, "documentTooLarge"));
                 return;
               }
-              const form = new FormData();
-              form.append("file", file);
-              if (select?.value) {
-                form.append("document_type", select.value);
-              }
-              form.append("language", language || "en");
-              const res = await api.post("/api/documents/upload", form);
-              setMessage(res.data.message);
-              setProfile({ ...profile, available_documents: res.data.available_documents || profile.available_documents });
+
               setError("");
-              input.value = "";
-              await load();
+              setMessage("");
+              setVerificationResult(null);
+              setUploadStage("uploading");
+
+              const t1 = setTimeout(() => setUploadStage("safety"), 400);
+              const t2 = setTimeout(() => setUploadStage("authenticity"), 900);
+              const t3 = setTimeout(() => setUploadStage("issuer"), 1400);
+              const t4 = setTimeout(() => setUploadStage("extracting"), 1900);
+
+              try {
+                const form = new FormData();
+                form.append("file", file);
+                if (select?.value) {
+                  form.append("document_type", select.value);
+                }
+                form.append("language", language || "en");
+                const res = await api.post("/api/documents/upload", form);
+
+                clearTimeout(t1);
+                clearTimeout(t2);
+                clearTimeout(t3);
+                clearTimeout(t4);
+                setUploadStage(null);
+
+                const vStatus = res.data.verification_status || res.data.verification?.status || (res.data.eligibility_usable ? "VERIFIED" : "REVIEW_REQUIRED");
+                setVerificationResult({
+                  status: vStatus,
+                  message: res.data.message,
+                  reason_code: res.data.verification?.reason_code,
+                });
+
+                if (res.data.available_documents) {
+                  setProfile({ ...profile, available_documents: res.data.available_documents });
+                }
+                input.value = "";
+                await load();
+              } catch (err: any) {
+                clearTimeout(t1);
+                clearTimeout(t2);
+                clearTimeout(t3);
+                clearTimeout(t4);
+                setUploadStage(null);
+                const detail = err?.response?.data?.detail || err?.message || "Document upload failed.";
+                setError(detail);
+              }
             }}
           >
             <div className="grid gap-1 text-sm font-semibold">
@@ -274,15 +323,27 @@ export function DocumentsPage() {
 
             <label className="grid gap-1 text-sm font-semibold" htmlFor="upload">
               Select File (PDF, PNG, JPG)
-              <input id="upload" aria-label={t(language, "uploadDocument")} className="min-h-12 rounded-xl border p-3 font-normal" type="file" accept=".pdf,.png,.jpg,.jpeg" />
+              <input id="upload" data-tour="documents-upload-input" aria-label={t(language, "uploadDocument")} className="min-h-12 rounded-xl border p-3 font-normal" type="file" accept=".pdf,.png,.jpg,.jpeg" />
             </label>
+
+            {uploadStage && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-sm text-sahaya-green flex items-center gap-3 animate-pulse">
+                <Loader2 size={20} className="animate-spin flex-shrink-0" />
+                <div>
+                  <div className="font-semibold">{STAGE_LABELS[uploadStage] || "Processing document..."}</div>
+                  <div className="text-xs text-slate-600">Enforcing defense-in-depth document authenticity pipeline</div>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2 pt-1">
               <button
                 type="submit"
+                disabled={Boolean(uploadStage)}
                 data-tour="upload-button"
-                className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-sahaya-green px-4 font-semibold text-white shadow-sm hover:opacity-90 transition"
+                className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-sahaya-green px-4 font-semibold text-white shadow-sm hover:opacity-90 transition disabled:opacity-50"
               >
-                <UploadCloud size={18} /> {t(language, "uploadDocument")}
+                <UploadCloud size={18} /> {uploadStage ? "Verifying..." : t(language, "uploadDocument")}
               </button>
               <button type="button" onClick={() => load()} className="inline-flex min-h-12 items-center gap-2 rounded-xl border px-4 font-semibold hover:bg-stone-50 transition">
                 <RefreshCcw size={18} /> {t(language, "refreshDocuments")}
@@ -292,23 +353,98 @@ export function DocumentsPage() {
         </div>
       </section>
 
-      {message && <div className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{message}</div>}
-      {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-      <div className="space-y-3 rounded-3xl bg-white p-5 shadow-card">
-        {documents.length === 0 && <div className="rounded-xl border p-4 text-sm text-slate-600">{t(language, "noDocuments")}</div>}
-        {documents.map((doc) => (
-          <div key={doc.id} className="rounded-xl border p-4">
-            <div className="flex items-center gap-2 font-semibold">
-              <FileText size={18} /> {getLocalizedDocumentName(doc.document_type, language)}
-            </div>
-            <div className="mt-2 text-sm text-slate-600">
-              {t(language, "documentStatus")}: {doc.status} | {t(language, "verification")}: {doc.verification_state}
-            </div>
-            <div className="mt-2 rounded-xl bg-stone-50 p-3 text-sm">
-              {t(language, "maskedInfo")}: {JSON.stringify(doc.masked_fields)}
-            </div>
+      {/* Primary Verification Result Feedback Card */}
+      {verificationResult?.status === "REJECTED" && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-950 shadow-card">
+          <div className="flex items-center gap-2 text-base font-bold text-red-900">
+            <AlertTriangle size={22} className="text-red-600 flex-shrink-0" />
+            Document Could Not Be Verified
           </div>
-        ))}
+          <p className="mt-2 text-sm text-red-900 font-medium">
+            {verificationResult.message || "The document you uploaded may be fake or altered. Please make sure you upload a verified/original document and try again."}
+          </p>
+          <div className="mt-3 rounded-xl border border-red-200 bg-white/80 p-3.5 text-xs space-y-1.5">
+            <div className="font-bold text-red-950">Next steps to unlock scheme eligibility:</div>
+            <ul className="list-disc list-inside space-y-1 text-slate-700">
+              <li>Upload an official digital certificate bearing an authoritative cryptographic digital signature.</li>
+              <li>Upload a DigiLocker-issued or DigiLocker-verified digital document.</li>
+              <li>Or provide a clear, original, unaltered physical certificate scan.</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {verificationResult?.status === "REVIEW_REQUIRED" && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-card">
+          <div className="flex items-center gap-2 text-base font-bold text-amber-900">
+            <Clock size={22} className="text-amber-600 flex-shrink-0" />
+            Document Awaiting Officer Verification
+          </div>
+          <p className="mt-2 text-sm text-amber-900">
+            {verificationResult.message || "Your document passed initial safety checks, but requires manual officer verification before it can unlock scheme eligibility."}
+          </p>
+          <p className="mt-1 text-xs text-slate-600">
+            Tip: Uploading an official digitally-signed PDF or DigiLocker verified document allows immediate automated eligibility without waiting for manual review.
+          </p>
+        </div>
+      )}
+
+      {verificationResult?.status === "VERIFIED" && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950 shadow-card">
+          <div className="flex items-center gap-2 text-base font-bold text-emerald-900">
+            <ShieldCheck size={22} className="text-emerald-600 flex-shrink-0" />
+            Document Authenticity Verified
+          </div>
+          <p className="mt-1 text-sm text-emerald-900">
+            {verificationResult.message || "Your document passed cryptographic and issuer authenticity checks. It is now active for deterministic eligibility evaluations."}
+          </p>
+        </div>
+      )}
+
+      {message && !verificationResult && <div className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{message}</div>}
+      {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+      <div className="space-y-3 rounded-3xl bg-white p-5 shadow-card">
+        <h2 className="text-lg font-semibold text-slate-900">Uploaded Documents ({documents.length})</h2>
+        {documents.length === 0 && <div className="rounded-xl border p-4 text-sm text-slate-600">{t(language, "noDocuments")}</div>}
+        {documents.map((doc) => {
+          const isVerified = doc.verification_state === "VERIFIED" || doc.status === "verified";
+          const isRejected = doc.verification_state === "REJECTED" || doc.status === "rejected";
+          return (
+            <div key={doc.id} className="rounded-2xl border p-4 hover:border-slate-300 transition">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 font-semibold text-slate-900">
+                  <FileText size={18} className="text-sahaya-green" /> {getLocalizedDocumentName(doc.document_type, language)}
+                </div>
+                <div>
+                  {isVerified && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                      <ShieldCheck size={14} /> Verified & Eligible
+                    </span>
+                  )}
+                  {isRejected && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">
+                      <AlertTriangle size={14} /> Verification Failed (Not Usable)
+                    </span>
+                  )}
+                  {!isVerified && !isRejected && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                      <Clock size={14} /> Manual Review Required
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-2 text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+                <span>MIME: {doc.mime_type}</span>
+                <span>File: {doc.file_name}</span>
+                <span>Verification State: <strong className="uppercase">{doc.verification_state}</strong></span>
+              </div>
+              <div className="mt-2 rounded-xl bg-stone-50 p-2.5 text-xs text-slate-600">
+                {t(language, "maskedInfo")}: {JSON.stringify(doc.masked_fields)}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

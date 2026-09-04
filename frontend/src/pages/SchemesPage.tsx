@@ -62,7 +62,7 @@ export function SchemesPage() {
         </div>
       </section>
 
-      <div className="rounded-3xl bg-white p-4 shadow-card">
+      <div className="rounded-3xl bg-white p-4 shadow-card" data-tour="find-schemes-filter">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-1 text-sm font-semibold">
             {t(language, "search")}
@@ -75,7 +75,7 @@ export function SchemesPage() {
           </label>
           <label className="grid gap-1 text-sm font-semibold">
             {t(language, "category")}
-            <select className="min-h-12 rounded-xl border p-3 font-normal" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <select data-tour="find-schemes-filter" className="min-h-12 rounded-xl border p-3 font-normal" value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="">{t(language, "allCategories")}</option>
               {categories.map((cat) => (
                 <option key={cat} value={cat}>

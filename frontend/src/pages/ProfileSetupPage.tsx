@@ -5,7 +5,7 @@ import { ProfileForm } from "../components/ProfileForm";
 import { api } from "../services/api";
 import { useAppContext } from "../context/AppContext";
 import { t } from "../utils/i18n";
-import { SUPPORTED_LANGUAGES } from "../utils/languages";
+import { LanguageSelect } from "../components/LanguageSelect";
 import { hasActivePlayback, playExclusiveAudio, stopAllPlayback } from "../utils/speechUtils";
 
 export function ProfileSetupPage() {
@@ -91,13 +91,7 @@ export function ProfileSetupPage() {
       <p className="mt-2 text-slate-600">{t(language, "welcomeSubtitle")}</p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <label className="text-sm font-semibold" htmlFor="onboarding-language">{t(language, "preferredLanguage")}</label>
-        <select id="onboarding-language" className="min-h-12 rounded-xl border p-3" value={language} onChange={(e) => setLanguage(e.target.value)}>
-          {SUPPORTED_LANGUAGES.map((lang) => (
-            <option key={lang.code} value={lang.code}>
-              {lang.nativeLabel} ({lang.label})
-            </option>
-          ))}
-        </select>
+        <LanguageSelect id="onboarding-language" value={language} onChange={setLanguage} />
         {audio && audioError && <button type="button" onClick={playWelcome} className="inline-flex min-h-12 items-center gap-2 rounded-xl border px-4 font-semibold text-sahaya-green"><Volume2 size={18} /> {t(language, "playWelcome")}</button>}
       </div>
       <div className="mt-6">
