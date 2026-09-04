@@ -166,12 +166,36 @@ def test_profile_crud_and_delete():
     update = client.put(
         "/api/profile",
         headers=headers,
-        json={"preferred_language": "kn", "consent_given": True, "age": 30, "state": "Karnataka"},
+        json={
+            "full_name": "Kavitha Gowda",
+            "preferred_language": "kn",
+            "consent_given": True,
+            "age": 30,
+            "state": "Karnataka",
+            "occupation": "farmer",
+        },
     )
     assert update.status_code == 200
+    assert update.json()["full_name"] == "Kavitha Gowda"
+    assert update.json()["onboarding_completed"] is True
+
     fetched = client.get("/api/profile", headers=headers)
     assert fetched.status_code == 200
+    assert fetched.json()["full_name"] == "Kavitha Gowda"
     assert fetched.json()["preferred_language"] == "kn"
+    assert fetched.json()["onboarding_completed"] is True
+
+    # Test missing/empty name renders profile incomplete
+    update_no_name = client.put(
+        "/api/profile",
+        headers=headers,
+        json={"full_name": "   ", "age": 30, "state": "Karnataka", "occupation": "farmer"},
+    )
+    assert update_no_name.status_code == 200
+    assert update_no_name.json()["onboarding_completed"] is False
+
+    # Restore name and clean up
+    client.put("/api/profile", headers=headers, json={"full_name": "Kavitha Gowda"})
     deleted = client.delete("/api/profile", headers=headers)
     assert deleted.status_code == 200
     assert deleted.json()["status"] == "deleted"
@@ -256,4 +280,43 @@ def test_document_upload_ocr_quality_gate():
         data = res.json()
         assert data["ocr_quality"] == "poor"
         assert "ಮರು-ಅಪ್‌ಲೋಡ್" in data["message"] or "ಸ್ಪಷ್ಟವಾದ" in data["message"]
+
+
+def test_guided_profile_completion_flow():
+    headers = auth_headers()
+    # Reset/clear profile first
+    client.delete("/api/profile", headers=headers)
+
+    # Step 0: Blank profile
+    prof = client.get("/api/profile", headers=headers).json()
+    assert prof["onboarding_completed"] is False
+
+    # Step 1: Guide Me collects Name
+    step1 = client.put("/api/profile", headers=headers, json={"full_name": "Ramesh Kumar"}).json()
+    assert step1["full_name"] == "Ramesh Kumar"
+    assert step1["onboarding_completed"] is False
+
+    # Step 2: Guide Me collects Age
+    step2 = client.put("/api/profile", headers=headers, json={"age": 42}).json()
+    assert step2["age"] == 42
+    assert step2["full_name"] == "Ramesh Kumar"  # Name preserved
+    assert step2["onboarding_completed"] is False
+
+    # Step 3: Guide Me collects State
+    step3 = client.put("/api/profile", headers=headers, json={"state": "Karnataka"}).json()
+    assert step3["state"] == "Karnataka"
+    assert step3["onboarding_completed"] is False
+
+    # Step 4: Guide Me collects Occupation -> Profile becomes complete!
+    step4 = client.put("/api/profile", headers=headers, json={"occupation": "Farmer"}).json()
+    assert step4["occupation"] == "Farmer"
+    assert step4["onboarding_completed"] is True
+
+    # Step 5: Verify fetching profile retains all information and complete status
+    final_prof = client.get("/api/profile", headers=headers).json()
+    assert final_prof["full_name"] == "Ramesh Kumar"
+    assert final_prof["age"] == 42
+    assert final_prof["state"] == "Karnataka"
+    assert final_prof["occupation"] == "Farmer"
+    assert final_prof["onboarding_completed"] is True
 

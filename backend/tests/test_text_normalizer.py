@@ -54,6 +54,9 @@ def test_chat_endpoint_preserves_display_text_while_normalizing_tts(monkeypatch)
     settings = get_settings()
     monkeypatch.setattr(settings, "sarvam_api_key", "mock_key")
 
+    from app.core.rate_limit import rate_limiter
+    rate_limiter.reset()
+
     client = TestClient(app)
     # Login as citizen
     login_res = client.post("/api/auth/login", json={"email": "citizen@techsahaya.org", "password": "Citizen@123"})

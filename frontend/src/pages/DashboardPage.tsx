@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, ChevronRight, Languages, Mic, Play, Search, ShieldCheck, Sparkles, Square, Users, Volume2 } from "lucide-react";
+import { ArrowRight, Award, CheckCircle2, ChevronRight, Compass, Languages, Mic, Play, Search, ShieldCheck, Sparkles, Square, Users, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { OnboardingChecklist, type OnboardingStep } from "../components/OnboardingChecklist";
@@ -9,6 +9,7 @@ import { api } from "../services/api";
 import { t } from "../utils/i18n";
 import { SUPPORTED_LANGUAGES } from "../utils/languages";
 import { hasActivePlayback, playExclusiveAudio, stopAllPlayback } from "../utils/speechUtils";
+import { isProfileComplete } from "../utils/profileUtils";
 import type { Scheme } from "../types";
 
 const getDashboardSummaryAutoplayKey = (userId?: string) =>
@@ -24,6 +25,7 @@ export function DashboardPage() {
   const [summaryPlaying, setSummaryPlaying] = useState(false);
   const [summaryAutoplayBlocked, setSummaryAutoplayBlocked] = useState(false);
   const [activeUsersCount, setActiveUsersCount] = useState<number | null>(null);
+  const [passport, setPassport] = useState<any>(null);
   const [lifeEventModal, setLifeEventModal] = useState<string | null>(null);
   const [lifeEventData, setLifeEventData] = useState<any>({});
   const summaryAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -48,6 +50,7 @@ export function DashboardPage() {
     summaryRequestedKeys.current.add(eligibilityKey);
     api.get("/api/recommendations").then((res) => { if (isMounted) setRecommendations(res.data); }).catch(() => { if (isMounted) setRecommendations([]); });
     api.get("/api/welfare-gaps").then((res) => { if (isMounted) setGaps(res.data); }).catch(() => { if (isMounted) setGaps([]); });
+    api.get("/api/benefits/passport").then((res) => { if (isMounted) setPassport(res.data); }).catch(() => {});
     setEligibleError("");
     setSummaryAudio(null);
     api.get("/api/eligible-schemes")
@@ -156,15 +159,15 @@ export function DashboardPage() {
   const getStepDescription = (stepId: number): string => {
     switch (stepId) {
       case 1:
-        if (language === "hi") return "आयु, राज्य और व्यवसाय विवरण जोड़ें";
-        if (language === "kn") return "ವಯಸ್ಸು, ರಾಜ್ಯ ಮತ್ತು ಉದ್ಯೋಗ ವಿವರಗಳನ್ನು ಸೇರಿಸಿ";
-        if (language === "te") return "వయస్సు, రాష్ట్రం మరియు వృత్తి వివరాలను జోడించండి";
-        if (language === "ta") return "வயது, மாநிலம் மற்றும் தொழில் விவரங்களைச் சேர்க்கவும்";
-        if (language === "ml") return "പ്രായം, സംസ്ഥാനം, തൊഴിൽ വിവരങ്ങൾ ചേർക്കുക";
-        if (language === "bn") return "বয়স, রাজ্য এবং পেশার বিবরণ যোগ করুন";
-        if (language === "mr") return "वय, राज्य आणि व्यवसाय तपशील जोडा";
-        if (language === "gu") return "ઉંમર, રાજ્ય અને વ્યવસાયની વિગતો ઉમેરો";
-        return "Add age, state and occupation details";
+        if (language === "hi") return "नाम, आयु, राज्य और व्यवसाय विवरण जोड़ें";
+        if (language === "kn") return "ಹೆಸರು, ವಯಸ್ಸು, ರಾಜ್ಯ ಮತ್ತು ಉದ್ಯೋಗ ವಿವರಗಳನ್ನು ಸೇರಿಸಿ";
+        if (language === "te") return "పేరు, వయస్సు, రాష్ట్రం మరియు వృత్తి వివరాలను జోడించండి";
+        if (language === "ta") return "பெயர், வயது, மாநிலம் மற்றும் தொழில் விவரங்களைச் சேர்க்கவும்";
+        if (language === "ml") return "പേര്, പ്രായം, സംസ്ഥാനം, തൊഴിൽ വിവരങ്ങൾ ചേർക്കുക";
+        if (language === "bn") return "নাম, বয়স, রাজ্য এবং পেশার বিবরণ যোগ করুন";
+        if (language === "mr") return "नाव, वय, राज्य आणि व्यवसाय तपशील जोडा";
+        if (language === "gu") return "નામ, ઉંમર, રાજ્ય અને વ્યવસાયની વિગતો ઉમેરો";
+        return "Add name, age, state and occupation details";
       case 2:
         if (language === "hi") return "पहचान और आय सत्यापन दस्तावेज़ जोड़ें";
         if (language === "kn") return "ಗುರುತು ಮತ್ತು ಆದಾಯ ಪರಿಶೀಲನಾ ದಾಖಲೆಗಳನ್ನು ಸೇರಿಸಿ";
@@ -215,7 +218,7 @@ export function DashboardPage() {
       id: 1,
       title: t(language, "completeProfile"),
       description: getStepDescription(1),
-      isCompleted: Boolean(profile.age && profile.state && profile.occupation),
+      isCompleted: isProfileComplete(profile),
       route: "/profile",
     },
     {
@@ -343,6 +346,59 @@ export function DashboardPage() {
           </div>
         </div>
       </section>
+
+      {/* Benefits Passport Snapshot */}
+      {passport && (
+        <section className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50/90 via-white to-teal-50/70 p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-emerald-100/80 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md shadow-emerald-600/20">
+                <Award size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-slate-900">Your Verified Benefits Passport</h2>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                    <ShieldCheck size={12} /> Verified State
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600">Deterministic citizen welfare state derived from verified documents & profile</p>
+              </div>
+            </div>
+            <Link
+              to="/benefits"
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 transition"
+            >
+              View Full Passport & Radar <ChevronRight size={16} />
+            </Link>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+              <div className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Available Now</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{passport.summary?.eligible_count ?? 0}</div>
+              <div className="text-xs text-slate-500">Qualifying schemes</div>
+            </div>
+            <div className="rounded-2xl border border-amber-100 bg-white p-4 shadow-sm">
+              <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide">One Step Away</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{passport.summary?.almost_eligible_count ?? 0}</div>
+              <div className="text-xs text-slate-500">Missing 1 document/action</div>
+            </div>
+            <div className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm">
+              <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Eligibility Radar</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{passport.summary?.future_count ?? 0}</div>
+              <div className="text-xs text-slate-500">Upcoming milestones</div>
+            </div>
+            <div className="rounded-2xl border border-teal-100 bg-white p-4 shadow-sm">
+              <div className="text-xs font-semibold text-teal-700 uppercase tracking-wide">Verified Docs</div>
+              <div className="mt-1 text-2xl font-bold text-slate-900">{passport.summary?.verified_documents ?? 0}</div>
+              <div className="text-xs text-slate-500">
+                {passport.profile?.complete ? "Profile 100% Complete" : "Profile Incomplete"}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Stat Cards */}
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">

@@ -132,6 +132,31 @@ const commonDocuments = [
     },
   },
   {
+    documentType: "marksheet_academic_record",
+    name: {
+      en: "Marksheet / Academic Record (DigiLocker)",
+      hi: "अंकतालिका / शैक्षणिक रिकॉर्ड (डिजिलॉकर)",
+      kn: "ಅಂಕಪಟ್ಟಿ / ಶೈಕ್ಷಣಿಕ ದಾಖಲೆ (ಡಿಜಿಲಾಕರ್)",
+      te: "మార్కుల జాబితా / విద్యా రికార్డు (డిజిలాకర్)",
+      ta: "மதிப்பெண் சான்றிதழ் / கல்வி ஆவணம் (டிஜிலாக்கர்)",
+      ml: "മാർക്ക് ഷീറ്റ് / വിദ്യാഭ്യാസ രേഖ (ഡിജിലോക്കർ)",
+      bn: "নম্বরপত্র / শিক্ষাগত রেকর্ড (ডিজিলকার)",
+      mr: "गुणपत्रिका / शैक्षणिक नोंद (डिजीलॉकर)",
+      gu: "માર્કશીટ / શૈક્ષણિક રેકોર્ડ (ડિજીલોકર)"
+    },
+    usedFor: {
+      en: "Scholarship applications, higher education schemes, student welfare admissions, and academic qualification verification",
+      hi: "छात्रवृत्ति आवेदन, उच्च शिक्षा योजनाएं, छात्र कल्याण प्रवेश और शैक्षणिक योग्यता सत्यापन",
+      kn: "ವಿದ್ಯಾರ್ಥಿವೇತನ ಅರ್ಜಿಗಳು, ಉನ್ನತ ಶಿಕ್ಷಣ ಯೋಜನೆಗಳು, ವಿದ್ಯಾರ್ಥಿ ಪ್ರವೇಶ ಮತ್ತು ಶೈಕ್ಷಣಿಕ ಅರ್ಹತೆ ಪರಿಶೀಲನೆ",
+      te: "స్కాలర్‌షిప్ దరఖాస్తులు, ఉన్నత విద్యా పథకాలు, విద్యార్థి ప్రవేశాలు మరియు విద్యా అర్హత నిర్ధారణ",
+      ta: "கல்வி உதவித்தொகை விண்ணப்பங்கள், உயர்கல்வித் திட்டங்கள் மற்றும் கல்வித் தகுதி சரிபார்ப்பு",
+      ml: "സ്കോളർഷിപ്പ് അപേക്ഷകൾ, ഉന്നത വിദ്യാഭ്യാസ പദ്ധതികൾ, വിദ്യാഭ്യാസ യോഗ്യതാ പരിശോധന",
+      bn: "বৃত্তি আবেদন, উচ্চশিক্ষা প্রকল্প, শিক্ষার্থী কল্যাণ ভর্তি এবং শিক্ষাগত योग्यता যাচাই",
+      mr: "शिष्यवृत्ती अर्ज, उच्च शिक्षण योजना, विद्यार्थी कल्याण प्रवेश आणि शैक्षणिक पात्रता पडताळणी",
+      gu: "શિષ્યવૃત્તિ અરજીઓ, ઉચ્ચ શિક્ષણ યોજનાઓ, વિદ્યાર્થી પ્રવેશ અને શૈક્ષણિક લાયકાત ચકાસણી"
+    },
+  },
+  {
     documentType: "generic_sample_document",
     name: {
       en: "Generic sample document",
@@ -408,8 +433,10 @@ export function DocumentsPage() {
         <h2 className="text-lg font-semibold text-slate-900">Uploaded Documents ({documents.length})</h2>
         {documents.length === 0 && <div className="rounded-xl border p-4 text-sm text-slate-600">{t(language, "noDocuments")}</div>}
         {documents.map((doc) => {
-          const isVerified = doc.verification_state === "VERIFIED" || doc.status === "verified";
-          const isRejected = doc.verification_state === "REJECTED" || doc.status === "rejected";
+          const vState = doc.masked_fields?.verification_status || doc.verification_state;
+          const isVerified = vState === "VERIFIED" || doc.status === "verified" || doc.masked_fields?.eligibility_usable === true;
+          const isRejected = vState === "REJECTED" || doc.status === "rejected";
+          const statusDisplay = isVerified ? "Verified" : isRejected ? "Verification Failed" : "Verification Required";
           return (
             <div key={doc.id} className="rounded-2xl border p-4 hover:border-slate-300 transition">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -419,17 +446,17 @@ export function DocumentsPage() {
                 <div>
                   {isVerified && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
-                      <ShieldCheck size={14} /> Verified & Eligible
+                      <ShieldCheck size={14} /> Verified
                     </span>
                   )}
                   {isRejected && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">
-                      <AlertTriangle size={14} /> Verification Failed (Not Usable)
+                      <AlertTriangle size={14} /> Verification Failed
                     </span>
                   )}
                   {!isVerified && !isRejected && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                      <Clock size={14} /> Manual Review Required
+                      <Clock size={14} /> Verification Required
                     </span>
                   )}
                 </div>
@@ -437,7 +464,7 @@ export function DocumentsPage() {
               <div className="mt-2 text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
                 <span>MIME: {doc.mime_type}</span>
                 <span>File: {doc.file_name}</span>
-                <span>Verification State: <strong className="uppercase">{doc.verification_state}</strong></span>
+                <span>Verification Status: <strong className={isVerified ? "text-emerald-700 font-semibold" : isRejected ? "text-red-700 font-semibold" : "text-amber-700 font-semibold"}>{statusDisplay}</strong></span>
               </div>
               <div className="mt-2 rounded-xl bg-stone-50 p-2.5 text-xs text-slate-600">
                 {t(language, "maskedInfo")}: {JSON.stringify(doc.masked_fields)}

@@ -197,7 +197,21 @@ class DocumentService:
         "ration_card",
         "disability_certificate",
         "caste_certificate",
+        "marksheet_academic_record",
         "generic_sample_document",
+    }
+
+    type_aliases = {
+        "marksheet": "marksheet_academic_record",
+        "mark_sheet": "marksheet_academic_record",
+        "academic_record": "marksheet_academic_record",
+        "digilocker_marksheet": "marksheet_academic_record",
+        "digilocker_academic_record": "marksheet_academic_record",
+        "semester_marksheet": "marksheet_academic_record",
+        "marksheet_academic_record": "marksheet_academic_record",
+        "academic_marksheet": "marksheet_academic_record",
+        "student_marksheet": "marksheet_academic_record",
+        "education_certificate": "marksheet_academic_record",
     }
 
     def process_upload(
@@ -214,7 +228,7 @@ class DocumentService:
             if "aadhaar" in original_name or "aadhar" in original_name or "pan" in original_name:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Please do not upload Aadhaar or PAN images. Use self-declared profile fields or common verification documents (income certificate, land record, ration card, disability certificate, caste certificate, generic sample document).",
+                    detail="Please do not upload Aadhaar or PAN images. Use self-declared profile fields or common verification documents (income certificate, land record, ration card, disability certificate, caste certificate, marksheet / academic record, generic sample document).",
                 )
             content_type = file.content_type or self._content_type_from_name(file.filename or "")
             if content_type in {"application/octet-stream", "text/plain"}:
@@ -223,7 +237,12 @@ class DocumentService:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported file type")
             masked_name = re.sub(r"\d", "X", file.filename or "document")
     
-            doc_type = declared_type if (declared_type and declared_type in self.canonical_types) else self._classify(file.filename or "document")
+            normalized_declared = None
+            if declared_type:
+                clean_decl = declared_type.lower().strip()
+                normalized_declared = self.type_aliases.get(clean_decl) or (clean_decl if clean_decl in self.canonical_types else None)
+
+            doc_type = normalized_declared or self._classify(file.filename or "document")
     
             # In-memory ephemeral OCR (never saved to disk, zero external APIs)
             extracted_fields = self._extract_ephemeral_fields(content, content_type, doc_type, language=language)
@@ -584,11 +603,43 @@ class DocumentService:
             fields["_landholding_confidence"] = best_land_conf
             field_confidences["landholding"] = best_land_conf
 
+        # 5. Extract Academic / Marksheet fields if present
+        for line in lines:
+            roll_m = re.search(r"\b(?:roll\s*(?:no|number|num)?|reg(?:istration)?\s*(?:no|number)?|enrollment\s*(?:no)?)\s*[:=\-]\s*([A-Za-z0-9\-_/]+)", line, re.IGNORECASE)
+            if roll_m:
+                fields["roll_number"] = roll_m.group(1).strip()
+                field_confidences["roll_number"] = "high"
+                break
+
+        for line in lines:
+            res_m = re.search(r"\b(?:result|status|grade)\s*[:=\-]?\s*\b(pass(?:ed)?|fail(?:ed)?|first\s*class|distinction|promoted|cleared)\b", line, re.IGNORECASE)
+            if res_m:
+                fields["academic_status"] = res_m.group(1).upper()
+                field_confidences["academic_status"] = "high"
+                break
+
+        for line in lines:
+            inst_m = re.search(r"\b(?:university|board|institute|college|school|council)\b[^\n\r]*", line, re.IGNORECASE)
+            if inst_m and len(inst_m.group(0).strip()) < 80:
+                fields["institution"] = inst_m.group(0).strip()
+                field_confidences["institution"] = "medium"
+                break
+
         fields["field_confidences"] = field_confidences
         return fields
 
     def _classify(self, file_name: str) -> str:
         name = file_name.lower()
+        if (
+            "marksheet" in name
+            or "mark_sheet" in name
+            or "academic" in name
+            or "result" in name
+            or "transcript" in name
+            or "grade_card" in name
+            or "digilocker" in name
+        ):
+            return "marksheet_academic_record"
         if "income" in name or "aay" in name or "aadhaya" in name:
             return "income_certificate"
         if "land" in name or "rtc" in name or "patta" in name or "chitta" in name or "pahani" in name or "7/12" in name:

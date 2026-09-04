@@ -16,6 +16,7 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.models.db_models import AuditLog, AuthorizedSession, DocumentRecord, NotificationRecord, SavedScheme, User
 from app.models.schemas import (
+    BenefitsPassportResponse,
     ChatRequest,
     CheckEligibilityRequest,
     CitizenSessionRequest,
@@ -33,6 +34,7 @@ from app.models.schemas import (
 )
 from app.services.audit_service import audit_service
 from app.services.auth_service import auth_service
+from app.services.benefits_passport_service import benefits_passport_service
 from app.services.chat_service import chat_service
 from app.services.data_loader import load_languages, load_personas, load_rules, load_schemes, load_tours
 from app.services.document_service import document_service, REUPLOAD_PROMPTS
@@ -53,6 +55,7 @@ def _profile_from_current(db: Session, user: User):
     from app.models.schemas import EligibilityProfile
 
     return EligibilityProfile(
+        full_name=user.full_name,
         age=profile.age,
         gender=profile.gender,
         state=profile.state,
@@ -443,6 +446,11 @@ def recommendations(user: User = Depends(get_current_user), db: Session = Depend
 @router.get("/eligible-schemes")
 def eligible_schemes(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return recommendation_service.eligible_schemes(_profile_from_current(db, user))
+
+
+@router.get("/benefits/passport", response_model=BenefitsPassportResponse)
+def get_benefits_passport(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return benefits_passport_service.get_passport(db, user)
 
 
 @router.post("/eligible-schemes/summary-audio")

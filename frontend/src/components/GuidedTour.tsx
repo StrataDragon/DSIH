@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Bot, X, ChevronRight, Check } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
+import { isProfileComplete } from "../utils/profileUtils";
 
 export type TourStep = {
   target: string;
@@ -27,7 +28,7 @@ export function GuidedTour({ steps, onComplete }: GuidedTourProps) {
   
   const location = useLocation();
   const navigate = useNavigate();
-  const { language } = useAppContext();
+  const { language, user, profile } = useAppContext();
 
   useEffect(() => {
     if (currentStepIndex >= steps.length) {
@@ -42,6 +43,14 @@ export function GuidedTour({ steps, onComplete }: GuidedTourProps) {
 
   useEffect(() => {
     if (!step) return;
+
+    // Guard against infinite navigation loop if profile is incomplete
+    if (user?.role === "citizen" && !isProfileComplete(profile) && step.route && step.route !== "/profile") {
+      sessionStorage.removeItem("techSahayaTourActive");
+      sessionStorage.removeItem("techSahayaTourStepIndex");
+      onComplete();
+      return;
+    }
 
     // Handle cross-page navigation
     if (step.route && location.pathname !== step.route) {

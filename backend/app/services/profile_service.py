@@ -16,9 +16,22 @@ class ProfileService:
         return profile
 
     def to_response(self, db: Session, user: User, profile: ProfileRecord) -> ProfileResponse:
+        is_complete = bool(
+            user.full_name
+            and user.full_name.strip()
+            and profile.age
+            and profile.state
+            and profile.occupation
+        )
+        if profile.onboarding_completed != is_complete:
+            profile.onboarding_completed = is_complete
+            db.add(profile)
+            db.commit()
+            db.refresh(profile)
+
         return ProfileResponse(
             user_id=user.id,
-            full_name=user.full_name,
+            full_name=user.full_name or "",
             email=user.email,
             phone_number=user.phone_number,
             role=get_user_role(db, user.id),
@@ -69,9 +82,21 @@ class ProfileService:
 
     def update(self, db: Session, user: User, payload: ProfileUpdate) -> ProfileResponse:
         profile = self.get_or_create(db, user)
-        for key, value in payload.model_dump().items():
-            setattr(profile, key, value)
-        profile.onboarding_completed = bool(profile.age and profile.state and profile.occupation)
+        data = payload.model_dump(exclude_unset=True)
+        if "full_name" in data and data["full_name"] is not None:
+            name_val = data["full_name"].strip()
+            user.full_name = name_val
+            db.add(user)
+        for key, value in data.items():
+            if key != "full_name" and hasattr(profile, key):
+                setattr(profile, key, value)
+        profile.onboarding_completed = bool(
+            user.full_name
+            and user.full_name.strip()
+            and profile.age
+            and profile.state
+            and profile.occupation
+        )
         db.add(profile)
         db.add(
             NotificationRecord(

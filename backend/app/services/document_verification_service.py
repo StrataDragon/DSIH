@@ -99,6 +99,8 @@ ALLOWED_ISSUER_DOMAINS = [
     "rajasthan.gov.in",
     "kerala.gov.in",
     "bihar.gov.in",
+    "ac.in",
+    "edu.in",
 ]
 
 
@@ -160,7 +162,7 @@ class FileSafetyChecker:
                     if len(reader.pages) > self.MAX_PDF_PAGES:
                         return False, VerificationReasonCode.FILE_INVALID, "PDF exceeds page limit"
                 except Exception as pdf_err:
-                    if not content.startswith(b"%PDF-"):
+                    if b"%%EOF" not in content or len(content) < 64:
                         logger.warning("Corrupted or malformed PDF: %s", pdf_err)
                         return False, VerificationReasonCode.FILE_INVALID, "Malformed PDF structure"
 

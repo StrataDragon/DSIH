@@ -94,6 +94,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await api.get("/api/profile");
       setProfile({
+        full_name: response.data.full_name || user?.full_name || "",
         age: response.data.age,
         gender: response.data.gender,
         state: response.data.state,

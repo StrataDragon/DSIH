@@ -1,4 +1,4 @@
-import { Bot, Bell, ChevronsLeft, ChevronsRight, CircleUser, Files, GitCompareArrows, HandHelping, LayoutDashboard, Lock, LogOut, Menu, MessageSquareText, Network, Search, ShieldCheck, UserCog, Users, WalletCards, X } from "lucide-react";
+import { Award, Bot, Bell, ChevronsLeft, ChevronsRight, CircleUser, Files, GitCompareArrows, HandHelping, LayoutDashboard, Lock, LogOut, Menu, MessageSquareText, Network, Search, ShieldCheck, UserCog, Users, WalletCards, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
@@ -7,6 +7,7 @@ import { SUPPORTED_LANGUAGES } from "../utils/languages";
 import { FloatingChatWidget } from "./FloatingChatWidget";
 import { SpotlightOverlay } from "./SpotlightOverlay";
 import { GuidedTour, type TourStep } from "./GuidedTour";
+import { GuidedProfileModal } from "./GuidedProfileModal";
 import { LanguageSelect } from "./LanguageSelect";
 import { playWelcomeVoice } from "../utils/welcomeVoice";
 import { isProfileComplete } from "../utils/profileUtils";
@@ -73,6 +74,7 @@ type NavItem = {
 
 const citizenNav: NavItem[] = [
   { to: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard, tourId: "nav-dashboard" },
+  { to: "/benefits", labelKey: "benefitsPassport", icon: Award, tourId: "nav-benefits" },
   { to: "/chat", labelKey: "askSahaya", icon: MessageSquareText, tourId: "nav-chat" },
   { to: "/find-schemes", labelKey: "findBenefits", icon: Search, tourId: "nav-schemes" },
   { to: "/eligibility", labelKey: "eligibility", icon: WalletCards, tourId: "nav-eligibility" },
@@ -91,6 +93,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [tourActive, setTourActive] = useState(() => sessionStorage.getItem("techSahayaTourActive") === "true");
+  const [guidedProfileOpen, setGuidedProfileOpen] = useState(false);
+
+  const handleGuideMeClick = () => {
+    if (user?.role === "citizen" && !isProfileComplete(profile)) {
+      setGuidedProfileOpen(true);
+    } else {
+      setTourActive(true);
+    }
+  };
 
   useEffect(() => {
     if (tourActive) {
@@ -187,6 +198,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           onComplete={() => setTourActive(false)}
         />
       )}
+      <GuidedProfileModal
+        isOpen={guidedProfileOpen}
+        onClose={() => setGuidedProfileOpen(false)}
+        onStartTour={() => setTourActive(true)}
+      />
       <SpotlightOverlay />
       {user?.role !== "admin" && <FloatingChatWidget />}
 
@@ -211,7 +227,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-2 md:gap-3">
             <button 
-              onClick={() => setTourActive(true)}
+              onClick={handleGuideMeClick}
               className="hidden sm:flex items-center gap-2 rounded-xl bg-blue-50 px-4 min-h-12 text-sm font-bold text-blue-600 hover:bg-blue-100 transition shadow-sm border border-blue-100"
             >
               <Bot size={18} /> {t(language, "guideMe" as TranslationKey) || "Guide Me"}
@@ -238,11 +254,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <div className={`mx-auto grid max-w-7xl gap-6 px-4 py-6 ${collapsed ? "lg:grid-cols-[84px_1fr]" : "lg:grid-cols-[260px_1fr]"}`}>
-        <aside className="hidden rounded-lg bg-white p-3 shadow-card lg:block">
+      <div className={`mx-auto grid max-w-7xl 2xl:max-w-[1440px] gap-6 px-4 py-6 items-start ${collapsed ? "lg:grid-cols-[84px_1fr]" : "lg:grid-cols-[260px_1fr]"}`}>
+        <aside className="hidden rounded-2xl bg-white p-3 shadow-card lg:block lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto custom-scrollbar shrink-0 w-full">
           {navContent}
         </aside>
-        <main className="min-w-0">{children}</main>
+        <main className="min-w-0 w-full">{children}</main>
       </div>
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-slate-950/40 lg:hidden" role="dialog" aria-modal="true">
@@ -251,6 +267,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="font-bold text-sahaya-green">{t(language, "menu")}</div>
               <button onClick={() => setMobileOpen(false)} className="min-h-12 min-w-12 rounded-xl border" aria-label="Close menu"><X className="mx-auto" size={20} /></button>
             </div>
+            <button 
+              onClick={() => {
+                setMobileOpen(false);
+                handleGuideMeClick();
+              }}
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 min-h-12 text-sm font-bold text-blue-600 hover:bg-blue-100 transition shadow-sm border border-blue-100"
+            >
+              <Bot size={18} /> {t(language, "guideMe" as TranslationKey) || "Guide Me"}
+            </button>
             {navContent}
           </div>
         </div>

@@ -11,6 +11,7 @@ import { AdminSchemesPage } from "./pages/AdminSchemesPage";
 import { AdminSourcesPage } from "./pages/AdminSourcesPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { AskPage } from "./pages/AskPage";
+import { BenefitsPassportPage } from "./pages/BenefitsPassportPage";
 import { CscDashboardPage } from "./pages/CscDashboardPage";
 import { CscSessionPage } from "./pages/CscSessionPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -51,6 +52,7 @@ export default function App() {
       <Route path="/consent" element={<ProtectedRoute><AppShell><ConsentPage /></AppShell></ProtectedRoute>} />
       <Route path="/profile-setup" element={<ProtectedRoute><AppShell><ProfileSetupPage /></AppShell></ProtectedRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><AppShell><DashboardPage /></AppShell></ProtectedRoute>} />
+      <Route path="/benefits" element={<ProtectedRoute><AppShell><BenefitsPassportPage /></AppShell></ProtectedRoute>} />
       <Route path="/chat" element={<ProtectedRoute><AppShell><AskPage /></AppShell></ProtectedRoute>} />
       <Route path="/find-schemes" element={<ProtectedRoute><AppShell><SchemesPage /></AppShell></ProtectedRoute>} />
       <Route path="/eligibility" element={<ProtectedRoute><AppShell><EligibilityPage /></AppShell></ProtectedRoute>} />

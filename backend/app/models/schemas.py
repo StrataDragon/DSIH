@@ -26,6 +26,7 @@ class Scheme(BaseModel):
 
 
 class EligibilityProfile(BaseModel):
+    full_name: str | None = None
     age: int | None = None
     gender: str | None = None
     state: str | None = None
@@ -122,6 +123,7 @@ class VoiceChatResponse(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
+    full_name: str | None = None
     preferred_language: str = "en"
     accessibility_preference: str = "standard"
     consent_given: bool = False
@@ -144,6 +146,7 @@ class ProfileResponse(ProfileUpdate):
     email: EmailStr
     phone_number: str | None = None
     role: RoleName
+    onboarding_completed: bool = False
     stored_data_summary: dict[str, Any]
 
 
@@ -252,4 +255,100 @@ class CitizenSessionResponse(BaseModel):
 
 class SaveSchemeRequest(BaseModel):
     scheme_id: str
+
+
+class BenefitsPassportSummary(BaseModel):
+    eligible_count: int = 0
+    almost_eligible_count: int = 0
+    future_count: int = 0
+    verified_documents_count: int = 0
+    total_documents_count: int = 0
+    expiring_documents_count: int = 0
+    profile_completion_percentage: int = 0
+
+
+class EligibleBenefitItem(BaseModel):
+    scheme_id: str
+    name: str
+    category: str
+    department: str
+    official_link: str
+    benefits: list[str] = Field(default_factory=list)
+    matched_reasons: list[str] = Field(default_factory=list)
+    verified_documents_used: list[str] = Field(default_factory=list)
+    score: int = 100
+
+
+class AlmostEligibleItem(BaseModel):
+    scheme_id: str
+    name: str
+    category: str
+    department: str
+    blocking_reason_category: str  # ONE_MISSING_DOCUMENT, ONE_MISSING_ATTRIBUTE, NEAR_AGE_THRESHOLD, NEAR_INCOME_THRESHOLD
+    unmet_conditions: list[str] = Field(default_factory=list)
+    missing_document_name: str | None = None
+    missing_document_status: str = "NOT_UPLOADED"  # NOT_UPLOADED, UPLOADED_BUT_UNVERIFIED, VERIFICATION_FAILED, VERIFIED
+    unlock_action: str
+    action_route: str = "/documents"
+
+
+class EligibilityRadarItem(BaseModel):
+    scheme_id: str
+    name: str
+    category: str
+    trigger_condition: str
+    estimated_date: str | None = None
+    current_value: str | None = None
+    required_value: str | None = None
+    confidence: str = "HIGH"
+
+
+class DocumentAlertItem(BaseModel):
+    document_type: str
+    file_name: str | None = None
+    expires_at: str | None = None
+    days_remaining: int | None = None
+    affected_schemes_count: int = 0
+    affected_scheme_names: list[str] = Field(default_factory=list)
+    alert_level: str = "warning"  # warning, critical, info
+    recommendation: str
+
+
+class PassportActionItem(BaseModel):
+    id: str
+    priority: int
+    title: str
+    description: str
+    unlocked_schemes_count: int = 0
+    unlocked_scheme_names: list[str] = Field(default_factory=list)
+    action_route: str
+    action_label: str
+    category: str  # upload_document, complete_profile, renew_document
+
+
+class PassportTimelineEvent(BaseModel):
+    time_label: str
+    title: str
+    type: str  # current_eligible, missing_document, future_age, document_expiry
+    detail: str
+    badge: str
+
+
+class PassportChangeItem(BaseModel):
+    title: str
+    description: str
+    type: str = "positive"  # positive, warning, info
+
+
+class BenefitsPassportResponse(BaseModel):
+    profile_complete: bool
+    missing_profile_fields: list[str] = Field(default_factory=list)
+    summary: BenefitsPassportSummary
+    eligible_now: list[EligibleBenefitItem] = Field(default_factory=list)
+    almost_eligible: list[AlmostEligibleItem] = Field(default_factory=list)
+    eligibility_radar: list[EligibilityRadarItem] = Field(default_factory=list)
+    document_alerts: list[DocumentAlertItem] = Field(default_factory=list)
+    priority_actions: list[PassportActionItem] = Field(default_factory=list)
+    timeline: list[PassportTimelineEvent] = Field(default_factory=list)
+    recent_changes: list[PassportChangeItem] = Field(default_factory=list)
 

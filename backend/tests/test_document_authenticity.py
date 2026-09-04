@@ -29,15 +29,29 @@ from app.services.document_verification_service import (
     SAFE_REJECTED_MESSAGE,
     PIPELINE_VERSION,
 )
+from app.core.rate_limit import rate_limiter
 from main import app
 
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limiter_fixture():
+    rate_limiter.reset()
+
+
+_cached_tokens: dict[tuple[str, str], dict[str, str]] = {}
+
+
 def auth_headers(email: str = "citizen@techsahaya.org", password: str = "Citizen@123") -> dict[str, str]:
+    key = (email, password)
+    if key in _cached_tokens:
+        return _cached_tokens[key]
     response = client.post("/api/auth/login", json={"email": email, "password": password, "remember_session": False})
     assert response.status_code == 200
-    return {"Authorization": f"Bearer {response.json()['token']}"}
+    headers = {"Authorization": f"Bearer {response.json()['token']}"}
+    _cached_tokens[key] = headers
+    return headers
 
 
 def create_valid_pdf_base() -> bytes:
@@ -339,3 +353,226 @@ def test_eligibility_gate_allows_verified_document():
     assert result.json()["eligible"] is True
     assert result.json()["status"] == "eligible"
     assert "document condition satisfied" in result.json()["matched"]
+
+
+# ---------------------------------------------------------------------------
+# Test 15 — DigiLocker Marksheet / Academic Record with digital signature verifies
+# ---------------------------------------------------------------------------
+def test_digilocker_marksheet_cryptographic_verification():
+    headers = auth_headers()
+    signed_pdf = create_mock_signed_pdf(tampered=False)
+    upload = client.post(
+        "/api/documents/upload",
+        headers=headers,
+        files={"file": ("semester_results_marksheet.pdf", signed_pdf, "application/pdf")},
+        data={"document_type": "marksheet_academic_record"},
+    )
+    assert upload.status_code == 200
+    data = upload.json()
+    assert data["eligibility_usable"] is True
+    assert data["document_type"] == "marksheet_academic_record"
+    assert data["verification_status"] == "VERIFIED"
+    assert "marksheet_academic_record" in data["available_documents"]
+
+
+# ---------------------------------------------------------------------------
+# Test 16 — Marksheet with DigiLocker branding only (no crypto sig / QR) fails closed
+# ---------------------------------------------------------------------------
+def test_digilocker_marksheet_branding_only_fails_closed():
+    headers = auth_headers()
+    # Reset profile documents to ensure clean test state
+    client.put("/api/profile", headers=headers, json={"available_documents": []})
+
+    # Create unsigned image bytes with DigiLocker branding text (e.g. screenshot)
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (300, 300), color=(255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    draw.text((20, 30), "DigiLocker Verified Marksheet", fill=(0, 0, 0))
+    draw.text((20, 60), "Semester 4 Results - Pass", fill=(0, 0, 0))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    screenshot_bytes = buf.getvalue()
+
+    upload = client.post(
+        "/api/documents/upload",
+        headers=headers,
+        files={"file": ("digilocker_marksheet_screenshot.png", screenshot_bytes, "image/png")},
+        data={"document_type": "marksheet_academic_record"},
+    )
+    assert upload.status_code == 200
+    data = upload.json()
+    # Must fail closed: mere branding must NOT verify the document
+    assert data["eligibility_usable"] is False
+    assert data["verification_status"] == "REVIEW_REQUIRED"
+    assert data["verification"]["reason_code"] == "DOCUMENT_UNVERIFIED"
+    # Quarantined: not usable for eligibility
+    assert "marksheet_academic_record" not in data.get("available_documents", [])
+
+
+# ---------------------------------------------------------------------------
+# Test 17 — Verified marksheet satisfies education scheme document requirement
+# ---------------------------------------------------------------------------
+def test_verified_marksheet_satisfies_education_scheme_document_rule():
+    headers = auth_headers()
+    signed_pdf = create_mock_signed_pdf(tampered=False)
+    upload = client.post(
+        "/api/documents/upload",
+        headers=headers,
+        files={"file": ("cbse_marksheet_digilocker.pdf", signed_pdf, "application/pdf")},
+        data={"document_type": "marksheet_academic_record"},
+    )
+    assert upload.status_code == 200
+    data = upload.json()
+    assert data["eligibility_usable"] is True
+
+    # Student profile with verified marksheet
+    profile = {
+        "age": 20,
+        "gender": "female",
+        "state": "Karnataka",
+        "occupation": "student",
+        "income": 200000,
+        "landholding": 0,
+        "disability": False,
+        "available_documents": ["marksheet_academic_record"],
+    }
+    result = client.post(
+        "/api/check-eligibility",
+        headers=headers,
+        json={"scheme_id": "national-scholarship-portal", "profile": profile},
+    )
+    assert result.status_code == 200
+    assert result.json()["eligible"] is True
+    assert result.json()["status"] == "eligible"
+    assert "document condition satisfied" in result.json()["matched"]
+
+
+# ---------------------------------------------------------------------------
+# Test 18 — Marksheet does not prove eligibility by itself (core criteria gate)
+# ---------------------------------------------------------------------------
+def test_marksheet_does_not_prove_eligibility_by_itself():
+    headers = auth_headers()
+    # Profile has marksheet, but occupation is NOT student (e.g. farmer)
+    profile = {
+        "age": 45,
+        "gender": "male",
+        "state": "Karnataka",
+        "occupation": "farmer",
+        "income": 200000,
+        "landholding": 2,
+        "disability": False,
+        "available_documents": ["marksheet_academic_record"],
+    }
+    result = client.post(
+        "/api/check-eligibility",
+        headers=headers,
+        json={"scheme_id": "national-scholarship-portal", "profile": profile},
+    )
+    assert result.status_code == 200
+    assert result.json()["eligible"] is False
+    assert result.json()["status"] == "not_eligible"
+    # Document condition passed, but core occupation and age conditions failed
+    assert any("occupation" in f for f in result.json()["failed"])
+
+
+# ---------------------------------------------------------------------------
+# Test 19 — Edited / Fake Marksheet with tampered signature is REJECTED
+# ---------------------------------------------------------------------------
+def test_digilocker_marksheet_edited_or_tampered_signature_rejected():
+    headers = auth_headers()
+    client.put("/api/profile", headers=headers, json={"available_documents": []})
+    tampered_pdf = create_mock_signed_pdf(tampered=True)
+    upload = client.post(
+        "/api/documents/upload",
+        headers=headers,
+        files={"file": ("edited_marksheet_fake.pdf", tampered_pdf, "application/pdf")},
+        data={"document_type": "marksheet_academic_record"},
+    )
+    assert upload.status_code == 200
+    data = upload.json()
+    assert data["eligibility_usable"] is False
+    assert data["verification_status"] == "REJECTED"
+    assert data["verification"]["reason_code"] == "SIGNATURE_INVALID"
+    assert "marksheet_academic_record" not in data.get("available_documents", [])
+
+
+# ---------------------------------------------------------------------------
+# Test 20 — Marksheet with missing signature / verification data fails closed
+# ---------------------------------------------------------------------------
+def test_digilocker_marksheet_missing_signature_fails_closed():
+    headers = auth_headers()
+    client.put("/api/profile", headers=headers, json={"available_documents": []})
+    # Plain unsigned PDF without cryptographic signature or QR code
+    unsigned_pdf = create_valid_pdf_base()
+    upload = client.post(
+        "/api/documents/upload",
+        headers=headers,
+        files={"file": ("unsigned_college_marksheet.pdf", unsigned_pdf, "application/pdf")},
+        data={"document_type": "marksheet_academic_record"},
+    )
+    assert upload.status_code == 200
+    data = upload.json()
+    assert data["eligibility_usable"] is False
+    assert data["verification_status"] == "REVIEW_REQUIRED"
+    assert data["verification"]["reason_code"] == "DOCUMENT_UNVERIFIED"
+    assert "marksheet_academic_record" not in data.get("available_documents", [])
+
+
+# ---------------------------------------------------------------------------
+# Test 21 — Malformed Marksheet document is REJECTED
+# ---------------------------------------------------------------------------
+def test_digilocker_marksheet_malformed_file_rejected():
+    headers = auth_headers()
+    client.put("/api/profile", headers=headers, json={"available_documents": []})
+    malformed_bytes = b"%PDF-corrupted-and-broken-stream-data"
+    upload = client.post(
+        "/api/documents/upload",
+        headers=headers,
+        files={"file": ("broken_marksheet.pdf", malformed_bytes, "application/pdf")},
+        data={"document_type": "marksheet_academic_record"},
+    )
+    assert upload.status_code == 200
+    data = upload.json()
+    assert data["eligibility_usable"] is False
+    assert data["verification_status"] == "REJECTED"
+    assert data["verification"]["reason_code"] == "FILE_INVALID"
+
+
+# ---------------------------------------------------------------------------
+# Test 22 — Marksheet preserves ephemeral privacy architecture (300s TTL)
+# ---------------------------------------------------------------------------
+def test_digilocker_marksheet_privacy_and_ephemeral_ttl():
+    from app.core.db import SessionLocal
+    from app.models.db_models import DocumentRecord
+    from app.core.redis_client import ephemeral_store
+
+    headers = auth_headers()
+    signed_pdf = create_mock_signed_pdf(tampered=False)
+    upload = client.post(
+        "/api/documents/upload",
+        headers=headers,
+        files={"file": ("verified_digilocker_marksheet.pdf", signed_pdf, "application/pdf")},
+        data={"document_type": "marksheet_academic_record"},
+    )
+    assert upload.status_code == 200
+    doc_id = upload.json()["document"]
+
+    # Verify DB record has minimum masked metadata and no raw bytes
+    db = SessionLocal()
+    record = db.query(DocumentRecord).filter(DocumentRecord.id == doc_id).first()
+    assert record is not None
+    assert record.retained_in_storage is False
+    assert record.document_type == "marksheet_academic_record"
+    assert record.masked_fields["identifier_masked"] == "XXXX-XXXX"
+    assert record.masked_fields["verification_status"] == "VERIFIED"
+    assert record.masked_fields["eligibility_usable"] is True
+    db.close()
+
+    # Verify Redis ephemeral store holds derived data within TTL bounds
+    cached_payload = ephemeral_store.get(f"doc:{doc_id}")
+    assert cached_payload is not None
+    assert cached_payload["document_type"] == "marksheet_academic_record"
+    assert cached_payload["verification_status"] == "VERIFIED"
+    assert cached_payload["eligibility_usable"] is True
+
+

@@ -59,7 +59,7 @@
     "state_scope": ["All"],
     "benefits": ["Scholarship access", "Centralized application workflow"],
     "eligibility": ["Student status required", "Income and category criteria vary by scholarship"],
-    "required_documents": ["student id", "income certificate"],
+    "required_documents": ["marksheet / academic record", "student id", "income certificate"],
     "application_steps": ["Choose scholarship", "Fill student details", "Upload required documents and submit"],
     "department": "Ministry of Electronics & Information Technology / Education-linked departments",
     "official_link": "https://scholarships.gov.in/",

@@ -1,1 +1,1 @@
-{"min_age": 16, "max_age": 30, "occupation": ["student"], "max_income": 300000, "state": ["All"], "required_documents_any_of": ["income_certificate"]}
+{"min_age": 16, "max_age": 30, "occupation": ["student"], "max_income": 300000, "state": ["All"], "required_documents_any_of": ["income_certificate", "marksheet_academic_record", "academic_record", "student_id"]}

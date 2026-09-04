@@ -349,8 +349,11 @@ class ChatService:
             r"मेरी (उम्र|आय|विवरण|प्रोफ़ाइल|जमीन)",
             r"मेरी उम्र",
             r"मेरी आय",
-            r"నా (వయస్సు|ఆదాయం|వివరాలు)",
+            r"ना (వయస్సు|ఆదాయం|వివరాలు)",
             r"என் (வயது|வருமானம்)",
+            r"\b(what\s+am\s+i\s+eligible\s+for|what\s+benefits\s+do\s+i\s+get|what\s+schemes\s+do\s+i\s+qualify\s+for)\b",
+            r"\b(what\s+document\s+am\s+i\s+missing|what\s+documents\s+am\s+i\s+missing|what\s+is\s+blocking\s+me)\b",
+            r"\b(benefits\s+passport|eligibility\s+radar)\b",
         ]
         return any(re.search(pat, lowered) for pat in patterns)
 
@@ -371,6 +374,54 @@ class ChatService:
         msg = message.lower()
         is_age_query = any(w in msg for w in ["age", "old", "ವಯಸ್ಸು", "उम्र", "వయస్సు", "வயது", "വയസ്സ്", "বয়স", "ઉંમર", "वय"])
         is_income_query = any(w in msg for w in ["income", "salary", "ಆದಾಯ", "आय", "ఆదాయం", "வருமானம்", "ആദായം", "আয়", "આવક", "उत्पन्न"])
+        is_benefits_query = any(w in msg for w in ["what am i eligible for", "am i eligible", "my benefits", "benefits passport", "what can i apply for right now"])
+        is_missing_docs_query = any(w in msg for w in ["missing document", "what document am i missing", "blocking me", "which document"])
+
+        if is_benefits_query and profile:
+            eligible_list = []
+            for s in self.schemes:
+                rule = self.rules.get(s.id, {})
+                res = eligibility_engine.evaluate(s.id, profile, rule, s.alternative_scheme_ids)
+                if res.status == "eligible":
+                    eligible_list.append(s)
+
+            if eligible_list:
+                s_names = ", ".join([f"**{s.name}**" for s in eligible_list[:3]])
+                ans = (
+                    f"Based on your verified profile, you currently qualify for **{len(eligible_list)} scheme(s)**: {s_names}. "
+                    f"You can view your complete breakdown and official application links in your **Benefits Passport** (/benefits)."
+                )
+            else:
+                ans = (
+                    "Based on your current profile, no schemes are fully unlocked yet. "
+                    "Visit your **Benefits Passport** (/benefits) to see which verified documents or criteria are needed to qualify."
+                )
+
+            return ChatResponse(
+                answer=ans,
+                schemes=eligible_list[:3],
+                evidence=[],
+                verification_status="verified_from_source_data",
+                confidence="high",
+                offline_ready=True,
+                suggested_action={"type": "navigate", "title": "Open Benefits Passport", "route": "/benefits"},
+            )
+
+        if is_missing_docs_query and profile:
+            ans = (
+                "Based on your Benefits Passport evaluation, you have schemes that are currently **One Step Away**. "
+                "Uploading a verified **Income Certificate** or **Land Record** will unlock several central and state welfare benefits. "
+                "Visit your **Benefits Passport** (/benefits) to view prioritized actions."
+            )
+            return ChatResponse(
+                answer=ans,
+                schemes=[],
+                evidence=[],
+                verification_status="verified_from_source_data",
+                confidence="high",
+                offline_ready=True,
+                suggested_action={"type": "navigate", "title": "View Missing Documents", "route": "/benefits"},
+            )
 
         # If document was detected as poor quality and no verified profile data exists, prompt re-upload immediately
         if not has_live_docs and has_poor_quality_docs and profile.age is None and profile.income is None:

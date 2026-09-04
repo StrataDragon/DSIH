@@ -245,6 +245,39 @@ export const documentTranslations: Record<string, Record<string, string>> = {
     mr: "सर्वसाधारण नमुना दस्तऐवज",
     gu: "સામાન્ય નમૂના દસ્તાવેજ"
   },
+  "marksheet_academic_record": {
+    en: "Marksheet / Academic Record — DigiLocker",
+    hi: "अंकतालिका / शैक्षणिक रिकॉर्ड — डिजिलॉकर",
+    kn: "ಅಂಕಪಟ್ಟಿ / ಶೈಕ್ಷಣಿಕ ದಾಖಲೆ — ಡಿಜಿಲಾಕರ್",
+    te: "మార్కుల జాబితా / విద్యా రికార్డు — డిజిలాకర్",
+    ta: "மதிப்பெண் சான்றிதழ் / கல்வி ஆவணம் — டிஜிலாக்கர்",
+    ml: "മാർക്ക് ഷീറ്റ് / വിദ്യാഭ്യാസ രേഖ — ഡിജിലോക്കർ",
+    bn: "নম্বরপত্র / শিক্ষাগত রেকর্ড — ডিজিলকার",
+    mr: "गुणपत्रिका / शैक्षणिक नोंद — डिजीलॉकर",
+    gu: "માર્કશીટ / શૈક્ષણિક રેકોર્ડ — ડિજીલોકર"
+  },
+  "marksheet academic record": {
+    en: "Marksheet / Academic Record — DigiLocker",
+    hi: "अंकतालिका / शैक्षणिक रिकॉर्ड — डिजिलॉकर",
+    kn: "ಅಂಕಪಟ್ಟಿ / ಶೈಕ್ಷಣಿಕ ದಾಖಲೆ — ಡಿಜಿಲಾಕರ್",
+    te: "మార్కుల జాబితా / విద్యా రికార్డు — డిజిలాకర్",
+    ta: "மதிப்பெண் சான்றிதழ் / கல்வி ஆவணம் — டிஜிலாக்கர்",
+    ml: "മാർക്ക് ഷീറ്റ് / വിദ്യാഭ്യാസ രേഖ — ഡിജിലോക്കർ",
+    bn: "নম্বরপত্র / শিক্ষাগত রেকর্ড — ডিজিলকার",
+    mr: "गुणपत्रिका / शैक्षणिक नोंद — डिजीलॉकर",
+    gu: "માર્કશીટ / શૈક્ષણિક રેકોર્ડ — ડિજીલોકર"
+  },
+  "marksheet / academic record": {
+    en: "Marksheet / Academic Record — DigiLocker",
+    hi: "अंकतालिका / शैक्षणिक रिकॉर्ड — डिजिलॉकर",
+    kn: "ಅಂಕಪಟ್ಟಿ / ಶೈಕ್ಷಣಿಕ ದಾಖಲೆ — ಡಿಜಿಲಾಕರ್",
+    te: "మార్కుల జాబితా / విద్యా రికార్డు — డిజిలాకర్",
+    ta: "மதிப்பெண் சான்றிதழ் / கல்வி ஆவணம் — டிஜிலாக்கர்",
+    ml: "മാർക്ക് ഷീറ്റ് / വിദ്യാഭ്യാസ രേഖ — ഡിജിലോക്കർ",
+    bn: "নম্বরপত্র / শিক্ষাগত রেকর্ড — ডিজিলকার",
+    mr: "गुणपत्रिका / शैक्षणिक नोंद — डिजीलॉकर",
+    gu: "માર્કશીટ / શૈક્ષણિક રેકોર્ડ — ડિજીલોકર"
+  },
   "state residence proof": {
     hi: "राज्य निवास प्रमाण पत्र",
     kn: "ಕರ್ನಾಟಕ ವಾಸಸ್ಥಳ ಪುರಾವೆ",
@@ -320,9 +353,25 @@ export function getLocalizedScheme(scheme: Scheme, language: string): Scheme {
 }
 
 export function getLocalizedDocumentName(docName: string, language: string): string {
-  if (!docName || language === "en") return docName;
-  const lang = language.toLowerCase().trim();
+  if (!docName) return "";
+  const lang = (language || "en").toLowerCase().trim();
   const key = docName.toLowerCase().trim();
   const normalizedKey = key.replace(/_/g, " ");
-  return documentTranslations[key]?.[lang] || documentTranslations[normalizedKey]?.[lang] || docName;
+
+  if (lang === "en") {
+    if (documentTranslations[key]?.en) return documentTranslations[key].en;
+    if (documentTranslations[normalizedKey]?.en) return documentTranslations[normalizedKey].en;
+    if (key === "marksheet_academic_record" || key === "marksheet" || key === "academic_record") {
+      return "Marksheet / Academic Record — DigiLocker";
+    }
+    return normalizedKey.charAt(0).toUpperCase() + normalizedKey.slice(1);
+  }
+
+  return (
+    documentTranslations[key]?.[lang] ||
+    documentTranslations[normalizedKey]?.[lang] ||
+    documentTranslations[key]?.en ||
+    documentTranslations[normalizedKey]?.en ||
+    docName
+  );
 }

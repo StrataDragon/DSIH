@@ -157,7 +157,14 @@ class EligibilityEngine:
             return
         normalized_documents = {self._normalize_document_name(item) for item in documents}
         normalized_required = {self._normalize_document_name(item) for item in required}
-        if normalized_required.intersection(normalized_documents):
+
+        # Academic document equivalence:
+        # A verified marksheet / academic record satisfies education/academic document requirements
+        academic_family = {"academicrecord", "studentid"}
+        has_academic_doc = bool(normalized_documents.intersection(academic_family))
+        requires_academic_doc = bool(normalized_required.intersection(academic_family))
+
+        if normalized_required.intersection(normalized_documents) or (has_academic_doc and requires_academic_doc):
             matched.append("document condition satisfied")
         else:
             failed.append(f"At least one of these documents is required: {', '.join(required)}")
@@ -169,10 +176,21 @@ class EligibilityEngine:
             "studentcard": "studentid",
             "schoolid": "studentid",
             "collegeid": "studentid",
+            "marksheet": "academicrecord",
+            "marksheetacademicrecord": "academicrecord",
+            "academicrecord": "academicrecord",
+            "academicrecorddigilocker": "academicrecord",
+            "marksheetacademicrecorddigilocker": "academicrecord",
+            "digilockermarksheet": "academicrecord",
+            "digilockeracademicrecord": "academicrecord",
+            "semestermarksheet": "academicrecord",
+            "educationcertificate": "academicrecord",
             "landrecord": "landrecord",
             "landrecords": "landrecord",
             "incomecertificate": "incomecertificate",
             "rationcard": "rationcard",
+            "castecertificate": "castecertificate",
+            "disabilitycertificate": "disabilitycertificate",
         }
         normalized = "".join(char for char in value.lower() if char.isalnum())
         return aliases.get(normalized, normalized)

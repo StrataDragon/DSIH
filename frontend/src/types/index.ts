@@ -20,6 +20,7 @@ export type Scheme = {
 };
 
 export type EligibilityProfile = {
+  full_name?: string;
   age?: number;
   gender?: string;
   state?: string;
@@ -29,6 +30,8 @@ export type EligibilityProfile = {
   disability?: boolean;
   family_members?: Record<string, unknown>[];
   available_documents: string[];
+  preferred_language?: string;
+  consent_given?: boolean;
   onboarding_completed?: boolean;
 };
 

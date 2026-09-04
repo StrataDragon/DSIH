@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
+import { AlertCircle, ArrowRight, Bot, CheckCircle2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ProfileForm } from "../components/ProfileForm";
 import { SectionCard } from "../components/SectionCard";
+import { GuidedProfileModal } from "../components/GuidedProfileModal";
 import { useAppContext } from "../context/AppContext";
 import { api } from "../services/api";
 import { t } from "../utils/i18n";
@@ -11,7 +12,7 @@ import { LanguageSelect } from "../components/LanguageSelect";
 import { isProfileComplete, getMissingProfileFields } from "../utils/profileUtils";
 
 const friendlyFieldNames: Record<string, Record<string, string>> = {
-  full_name: { en: "Name", hi: "नाम", kn: "ಹೆಸರು", te: "పేరు", ta: "பெயர்", ml: "പേര്", bn: "নাম", mr: "नाव", gu: "નામ" },
+  full_name: { en: "Full Name", hi: "पूरा नाम", kn: "ಪೂರ್ಣ ಹೆಸರು", te: "పూర్తి పేరు", ta: "முழு பெயர்", ml: "പൂർണ്ണമായ പേര്", bn: "পুরো নাম", mr: "पूर्ण नाव", gu: "પૂરું નામ" },
   email: { en: "Email", hi: "ईमेल", kn: "ಇಮೇಲ್", te: "ఇమెయిల్", ta: "மின்னஞ்சல்", ml: "ഇമെയിൽ", bn: "ইমেল", mr: "ईमेल", gu: "ઇમેઇલ" },
   phone_number: { en: "Phone number", hi: "फोन नंबर", kn: "ಫೋನ್ ಸಂಖ್ಯೆ", te: "ఫోన్ నంబర్", ta: "தொலைபேசி எண்", ml: "ഫോൺ നമ്പർ", bn: "ফোন নম্বর", mr: "फोन नंबर", gu: "ફોન નંબર" },
   preferred_language: { en: "Preferred language", hi: "पसंदीदा भाषा", kn: "ಆದ್ಯತೆಯ ಭಾಷೆ", te: "ప్రాధాన్య భాష", ta: "விருப்பமான மொழி", ml: "തിരഞ്ഞെടുത്ത ഭാഷ", bn: "পছন্দের ভাষা", mr: "पसंतीची भाषा", gu: "પસંદગીની ભાષા" },
@@ -48,6 +49,7 @@ export function ProfilePage() {
   const [message, setMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState("");
+  const [guidedOpen, setGuidedOpen] = useState(false);
 
   useEffect(() => {
     api.get("/api/profile").then((res) => setStoredSummary(res.data.stored_data_summary)).catch(() => undefined);
@@ -63,6 +65,7 @@ export function ProfilePage() {
 
   return (
     <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+      <GuidedProfileModal isOpen={guidedOpen} onClose={() => setGuidedOpen(false)} />
       <SectionCard title={t(language, "profilePrivacy")}>
         {!profileIsComplete && (
           <div className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
@@ -87,6 +90,20 @@ export function ProfilePage() {
                 <span className="font-bold underline text-amber-950">{missingFields.join(", ")}</span>
               </div>
             )}
+            <div className="mt-3.5">
+              <button
+                type="button"
+                onClick={() => setGuidedOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 transition"
+              >
+                <Bot size={16} />
+                {language === "hi"
+                  ? "मार्गदर्शक के साथ पूरा करें (Guide Me)"
+                  : language === "kn"
+                  ? "ಮಾರ್ಗದರ್ಶಿಯೊಂದಿಗೆ ಪೂರ್ಣಗೊಳಿಸಿ (Guide Me)"
+                  : "Guide Me Through Missing Fields"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -138,6 +155,7 @@ export function ProfilePage() {
               });
               const updated = {
                 ...nextProfile,
+                full_name: res.data.full_name || nextProfile.full_name,
                 onboarding_completed: res.data.onboarding_completed,
               };
               setProfile(updated);
